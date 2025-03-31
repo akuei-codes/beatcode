@@ -16,6 +16,17 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <!-- Supabase Auth Helper -->
+    <script>
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        // The page was loaded with a hash that might be from Supabase Auth
+        // We'll let the Supabase client handle it
+        window.addEventListener('load', function() {
+          // This will be handled by the auth.onAuthStateChange in AuthContext
+        });
+      }
+    </script>
   </head>
 
   <body>

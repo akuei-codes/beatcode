@@ -2,13 +2,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Menu, X, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, profile, signOut } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -56,19 +67,53 @@ const Navbar = () => {
             </Button>
             
             <div className="ml-4 flex items-center space-x-2">
-              <Button 
-                variant="ghost"
-                className="border border-icon-gray hover:bg-icon-gray/30"
-                onClick={() => navigate('/login')}
-              >
-                Log In
-              </Button>
-              <Button
-                className="bg-icon-accent hover:brightness-110 text-icon-black"
-                onClick={() => navigate('/signup')}
-              >
-                Sign Up
-              </Button>
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                      <Avatar className="h-10 w-10 border-2 border-icon-accent">
+                        <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.name || 'User'} />
+                        <AvatarFallback className="bg-icon-dark-gray text-icon-accent">
+                          {profile?.name?.charAt(0) || user.email?.charAt(0) || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">{profile?.name}</p>
+                        <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/profile')}>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={signOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <>
+                  <Button 
+                    variant="ghost"
+                    className="border border-icon-gray hover:bg-icon-gray/30"
+                    onClick={() => navigate('/login')}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    className="bg-icon-accent hover:brightness-110 text-icon-black"
+                    onClick={() => navigate('/signup')}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )}
             </div>
           </div>
           
@@ -115,20 +160,57 @@ const Navbar = () => {
             >
               Join Battle
             </Button>
+            
             <div className="pt-4 pb-2 border-t border-icon-gray/30">
-              <Button 
-                variant="outline"
-                className="w-full mb-2"
-                onClick={() => { navigate('/login'); setIsMobileMenuOpen(false); }}
-              >
-                Log In
-              </Button>
-              <Button
-                className="w-full bg-icon-accent text-icon-black"
-                onClick={() => { navigate('/signup'); setIsMobileMenuOpen(false); }}
-              >
-                Sign Up
-              </Button>
+              {user ? (
+                <>
+                  <div className="flex items-center px-2 py-3">
+                    <Avatar className="h-10 w-10 border-2 border-icon-accent mr-3">
+                      <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.name || 'User'} />
+                      <AvatarFallback className="bg-icon-dark-gray text-icon-accent">
+                        {profile?.name?.charAt(0) || user.email?.charAt(0) || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium">{profile?.name}</p>
+                      <p className="text-xs text-gray-400">{profile?.email}</p>
+                      <p className="text-xs text-icon-accent">Rating: {profile?.rating}</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline"
+                    className="w-full mb-2"
+                    onClick={() => { navigate('/profile'); setIsMobileMenuOpen(false); }}
+                  >
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => { signOut(); setIsMobileMenuOpen(false); }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Log Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline"
+                    className="w-full mb-2"
+                    onClick={() => { navigate('/login'); setIsMobileMenuOpen(false); }}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    className="w-full bg-icon-accent text-icon-black"
+                    onClick={() => { navigate('/signup'); setIsMobileMenuOpen(false); }}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
