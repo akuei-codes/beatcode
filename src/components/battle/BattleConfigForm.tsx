@@ -42,6 +42,8 @@ export const BattleConfigForm = ({ onSubmit, onChange }: BattleConfigFormProps) 
   }, [language, difficulty, duration, isRated, onChange]);
 
   const handleSubmit = async () => {
+    if (isCreating) return; // Prevent multiple submissions
+    
     setIsCreating(true);
     try {
       await onSubmit({
@@ -50,6 +52,8 @@ export const BattleConfigForm = ({ onSubmit, onChange }: BattleConfigFormProps) 
         duration,
         isRated
       });
+    } catch (error) {
+      console.error("Error in form submission:", error);
     } finally {
       setIsCreating(false);
     }

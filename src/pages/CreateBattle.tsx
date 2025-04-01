@@ -35,6 +35,10 @@ const CreateBattle = () => {
       // Get a random problem
       const randomProblem = getRandomProblem();
       
+      if (!randomProblem || !randomProblem.id) {
+        throw new Error("Failed to get a random problem");
+      }
+      
       // Create battle in Supabase
       const { data: battle, error } = await supabase
         .from('battles')
@@ -63,9 +67,9 @@ const CreateBattle = () => {
       
       toast.success("Battle created successfully!");
       navigate(`/battle/${battle.id}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating battle:', error);
-      toast.error("Failed to create battle. Please try again.");
+      toast.error(`Failed to create battle: ${error.message || "Please try again."}`);
     }
   };
 
