@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,7 @@ import { BattlePreview } from '@/components/battle/BattlePreview';
 
 const CreateBattle = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [formState, setFormState] = useState<BattleConfig>({
     language: '',
@@ -35,6 +35,24 @@ const CreateBattle = () => {
     setIsLoading(true);
 
     try {
+      console.log("Creating battle with user:", user.id);
+      
+      // Verify the user exists in the profiles table
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+      
+      if (profileError || !userProfile) {
+        console.error("User profile not found:", profileError);
+        toast.error("Could not find your user profile. Please try logging out and back in.");
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log("User profile found:", userProfile);
+      
       // Get a random problem
       const randomProblem = await getRandomProblem();
       
@@ -51,7 +69,7 @@ const CreateBattle = () => {
           {
             creator_id: user.id,
             programming_language: config.language,
-            difficulty: config.difficulty, // This will now have the correct case (Easy, Medium, Hard)
+            difficulty: config.difficulty,
             duration: parseInt(config.duration),
             battle_type: config.battleType,
             status: 'open',
@@ -82,6 +100,14 @@ const CreateBattle = () => {
       setIsLoading(false);
     }
   };
+
+  // Add effect to check login status
+  useEffect(() => {
+    if (!user) {
+      toast.error("You must be logged in to create a battle");
+      navigate('/login');
+    }
+  }, [user, navigate]);
 
   return (
     <div className="min-h-screen pt-10 pb-20 px-4">

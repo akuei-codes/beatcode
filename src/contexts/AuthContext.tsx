@@ -50,6 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change event:', event);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -71,41 +72,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [navigate]);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (error) {
-      console.error('Error fetching profile:', error);
-      return;
-    }
-
-    if (data) {
-      setProfile(data as Profile);
-    } else {
-      // Create a new profile if it doesn't exist
-      const { data: { user } } = await supabase.auth.getUser();
+    try {
+      console.log('Fetching profile for user ID:', userId);
       
-      if (user) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        // Instead of returning early, we'll create a profile
+        await createUserProfile(userId);
+        return;
+      }
+
+      if (data) {
+        console.log('Profile found:', data);
+        setProfile(data as Profile);
+      } else {
+        // Create a new profile if it doesn't exist
+        await createUserProfile(userId);
+      }
+    } catch (err) {
+      console.error('Exception in fetchProfile:', err);
+    }
+  };
+  
+  const createUserProfile = async (userId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      
+      if (userData?.user) {
+        console.log('Creating new profile for user:', userData.user.id);
+        
         const newProfile = {
-          id: user.id,
-          username: user.user_metadata?.name || user.user_metadata?.full_name || 'Anonymous Coder', // Using username
-          email: user.email,
-          avatar_url: user.user_metadata?.avatar_url || null,
-          rating: 1000, // Default rating
+          id: userData.user.id,
+          username: userData.user.user_metadata?.name || userData.user.user_metadata?.full_name || 'Anonymous Coder',
+          email: userData.user.email,
+          avatar_url: userData.user.user_metadata?.avatar_url || null,
+          rating: 1000,
           created_at: new Date().toISOString()
         };
         
-        const { error } = await supabase.from('profiles').insert(newProfile);
+        const { data, error } = await supabase
+          .from('profiles')
+          .insert(newProfile)
+          .select()
+          .single();
         
-        if (!error) {
-          setProfile(newProfile as Profile);
-        } else {
+        if (error) {
           console.error('Error creating profile:', error);
+          toast.error('Failed to create user profile');
+        } else {
+          console.log('Profile created successfully:', data);
+          setProfile(data as Profile);
         }
       }
+    } catch (err) {
+      console.error('Exception in createUserProfile:', err);
     }
   };
 
