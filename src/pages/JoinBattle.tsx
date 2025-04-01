@@ -15,19 +15,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-
-interface Battle {
-  id: string;
-  language: string;
-  difficulty: string;
-  duration: number;
-  isRated: boolean;
-  createdAt: string;
-  problemId: number;
-}
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { Battle } from '@/lib/supabase';
 
 const JoinBattle = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [battles, setBattles] = useState<Battle[]>([]);
   const [filteredBattles, setFilteredBattles] = useState<Battle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,63 +51,36 @@ const JoinBattle = () => {
     'hard': 50
   };
 
-  useEffect(() => {
-    // Simulate fetching battles from API
-    const fetchBattles = async () => {
-      setIsLoading(true);
-      try {
-        // In a real app, this would be an API call to fetch battles
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Retrieve battles from localStorage (for demo purposes)
-        const storedBattles = JSON.parse(localStorage.getItem('battles') || '[]');
-        
-        // If no stored battles, create some demo battles
-        if (storedBattles.length === 0) {
-          const demoBattles: Battle[] = [
-            {
-              id: 'battle-1',
-              language: 'javascript',
-              difficulty: 'easy',
-              duration: 10,
-              isRated: true,
-              createdAt: new Date().toISOString(),
-              problemId: 42
-            },
-            {
-              id: 'battle-2',
-              language: 'python',
-              difficulty: 'medium',
-              duration: 15,
-              isRated: true,
-              createdAt: new Date().toISOString(),
-              problemId: 123
-            },
-            {
-              id: 'battle-3',
-              language: 'java',
-              difficulty: 'hard',
-              duration: 30,
-              isRated: false,
-              createdAt: new Date().toISOString(),
-              problemId: 456
-            }
-          ];
-          localStorage.setItem('battles', JSON.stringify(demoBattles));
-          setBattles(demoBattles);
-          setFilteredBattles(demoBattles);
-        } else {
-          setBattles(storedBattles);
-          setFilteredBattles(storedBattles);
-        }
-      } catch (error) {
-        toast.error("Failed to load battles");
-        console.error(error);
-      } finally {
-        setIsLoading(false);
+  const fetchBattles = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch battles that are in 'waiting' status (not yet started)
+      const { data, error } = await supabase
+        .from('battles')
+        .select('*')
+        .eq('status', 'waiting')
+        .is('defender_id', null)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching battles:', error);
+        toast.error('Failed to load battles');
+        throw error;
       }
-    };
+      
+      console.log('Fetched battles:', data);
+      if (data) {
+        setBattles(data);
+        setFilteredBattles(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch battles:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchBattles();
   }, []);
 
@@ -137,22 +104,51 @@ const JoinBattle = () => {
     setFilteredBattles(result);
   }, [battles, searchTerm, difficultyFilter]);
 
-  const handleJoinBattle = (battle: Battle) => {
-    // In a real app, this would call an API to join the battle
-    localStorage.setItem('currentBattle', JSON.stringify(battle));
-    toast.success(`Joining battle as defender`);
-    navigate(`/battle/${battle.id}`);
+  const handleJoinBattle = async (battle: Battle) => {
+    if (!user) {
+      toast.error("You must be logged in to join a battle");
+      navigate('/login');
+      return;
+    }
+
+    if (battle.creator_id === user.id) {
+      toast.error("You cannot join your own battle!");
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Update the battle with the defender's ID
+      const { data, error } = await supabase
+        .from('battles')
+        .update({
+          defender_id: user.id,
+          status: 'in_progress',
+          start_time: new Date().toISOString()
+        })
+        .eq('id', battle.id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Error joining battle:", error);
+        throw error;
+      }
+      
+      toast.success("You've joined the battle!");
+      navigate(`/battle/${battle.id}`);
+    } catch (error: any) {
+      toast.error(`Failed to join battle: ${error.message || "Please try again."}`);
+      console.error('Error joining battle:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const refreshBattles = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      const storedBattles = JSON.parse(localStorage.getItem('battles') || '[]');
-      setBattles(storedBattles);
-      setFilteredBattles(storedBattles);
-      setIsLoading(false);
-      toast.success("Battle list refreshed");
-    }, 800);
+    fetchBattles();
+    toast.success("Battle list refreshed");
   };
 
   const formatTimeAgo = (dateString: string) => {
@@ -256,7 +252,7 @@ const JoinBattle = () => {
                       <span className="text-xs bg-icon-accent/20 text-icon-accent px-2 py-0.5 rounded-full">
                         {difficultyPoints[battle.difficulty]} points
                       </span>
-                      {battle.isRated && (
+                      {battle.is_rated && (
                         <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
                           Rated
                         </span>
@@ -264,7 +260,7 @@ const JoinBattle = () => {
                     </div>
                     <h3 className="text-lg font-medium flex items-center gap-2">
                       <Code size={18} className="text-icon-accent" />
-                      <span>Battle {battle.id.substring(0, 8)} in {languageLabels[battle.language]}</span>
+                      <span>Battle in {languageLabels[battle.language] || battle.language}</span>
                     </h3>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-icon-light-gray">
                       <div className="flex items-center gap-1.5">
@@ -273,20 +269,30 @@ const JoinBattle = () => {
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Calendar size={14} />
-                        <span>{formatTimeAgo(battle.createdAt)}</span>
+                        <span>{formatTimeAgo(battle.created_at)}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Shield size={14} />
-                        <span>{battle.isRated ? 'Rated' : 'Casual'}</span>
+                        <span>{battle.is_rated ? 'Rated' : 'Casual'}</span>
                       </div>
                     </div>
                   </div>
                   <Button
                     onClick={() => handleJoinBattle(battle)}
                     className="w-full md:w-auto icon-button-primary group"
+                    disabled={isLoading}
                   >
-                    Defend
-                    <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    {isLoading ? (
+                      <>
+                        <RefreshCw size={16} className="animate-spin mr-2" />
+                        Joining...
+                      </>
+                    ) : (
+                      <>
+                        Defend
+                        <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

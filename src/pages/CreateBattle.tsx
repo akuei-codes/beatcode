@@ -36,7 +36,7 @@ const CreateBattle = () => {
 
     try {
       // Get a random problem
-      const randomProblem = getRandomProblem();
+      const randomProblem = await getRandomProblem();
       
       if (!randomProblem || !randomProblem.id) {
         throw new Error("Failed to get a random problem");
