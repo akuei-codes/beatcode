@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -13,14 +14,13 @@ import {
   Clock,
   HelpCircle,
   ShieldCheck,
-  LucideIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Editor } from '@monaco-editor/react';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, Battle, Solution, Profile } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Problem, getProblemById } from '@/lib/problems';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,23 +32,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion"
+} from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -56,15 +47,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
+
+// Import types from supabase.ts
+import type { Profile, Battle, Solution } from '@/lib/supabase';
+
+// Define interfaces
+type StatusIconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 interface Participant {
   id: string;
@@ -88,18 +84,18 @@ const BattleArena = () => {
   const [loser, setLoser] = useState<Participant | null>(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [isCodeCopied, setIsCodeCopied] = useState(false);
-  const [showProblemDescription, setShowProblemDescription] = useState(false);
-  const [showBattleDetails, setShowBattleDetails] = useState(false);
-  const [showSolution, setShowSolution] = useState(false);
   const [solutionFeedback, setSolutionFeedback] = useState('');
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const editorRef = useRef<any>(null);
+  
+  const queryClient = useQueryClient();
 
   // Fetch battle details
-  const { data: battle, isLoading: isBattleLoading, error: battleError } = useQuery(
-    ['battle', battleId],
-    async () => {
+  const { data: battle, isLoading: isBattleLoading } = useQuery({
+    queryKey: ['battle', battleId],
+    queryFn: async () => {
       if (!battleId) throw new Error("Battle ID is required");
+      
       const { data, error } = await supabase
         .from('battles')
         .select('*')
@@ -110,97 +106,97 @@ const BattleArena = () => {
         console.error("Supabase error:", error);
         throw error;
       }
-      return data;
-    }
-  );
+      
+      return data as Battle;
+    },
+    refetchInterval: isBattleActive ? 5000 : false, // Refetch every 5 seconds if battle is active
+  });
 
   // Fetch problem details
-  const { data: problem, isLoading: isProblemLoading, error: problemError } = useQuery(
-    ['problem', battle?.problem_id],
-    async () => {
+  const { data: problem, isLoading: isProblemLoading } = useQuery({
+    queryKey: ['problem', battle?.problem_id],
+    queryFn: async () => {
       if (!battle?.problem_id) throw new Error("Problem ID is required");
       return getProblemById(battle.problem_id);
     },
-    {
-      enabled: !!battle?.problem_id,
-    }
-  );
+    enabled: !!battle?.problem_id,
+  });
 
   // Fetch creator profile
-  const { data: creator, isLoading: isCreatorLoading, error: creatorError } = useQuery(
-    ['creator', battle?.creator_id],
-    async () => {
+  const { data: creator, isLoading: isCreatorLoading } = useQuery({
+    queryKey: ['creator', battle?.creator_id],
+    queryFn: async () => {
       if (!battle?.creator_id) throw new Error("Creator ID is required");
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', battle?.creator_id)
+        .eq('id', battle.creator_id)
         .single();
 
       if (error) {
         console.error("Supabase error:", error);
         throw error;
       }
+      
       return data as Profile;
     },
-    {
-      enabled: !!battle?.creator_id,
-    }
-  );
+    enabled: !!battle?.creator_id,
+  });
 
   // Fetch defender profile
-  const { data: defender, isLoading: isDefenderLoading, error: defenderError } = useQuery(
-    ['defender', battle?.defender_id],
-    async () => {
+  const { data: defender, isLoading: isDefenderLoading } = useQuery({
+    queryKey: ['defender', battle?.defender_id],
+    queryFn: async () => {
       if (!battle?.defender_id) throw new Error("Defender ID is required");
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', battle?.defender_id)
+        .eq('id', battle.defender_id)
         .single();
 
       if (error) {
         console.error("Supabase error:", error);
         throw error;
       }
+      
       return data as Profile;
     },
-    {
-      enabled: !!battle?.defender_id,
-    }
-  );
+    enabled: !!battle?.defender_id,
+  });
 
   // Fetch solution details
-  const { data: solution, isLoading: isSolutionLoading, error: solutionError } = useQuery(
-    ['solution', battleId, user?.id],
-    async () => {
+  const { data: solution, isLoading: isSolutionLoading } = useQuery({
+    queryKey: ['solution', battleId, user?.id],
+    queryFn: async () => {
       if (!battleId || !user?.id) throw new Error("Battle ID and User ID are required");
+      
       const { data, error } = await supabase
         .from('solutions')
         .select('*')
         .eq('battle_id', battleId)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) {
-        console.error("Supabase error:", error);
         // If no solution is found, it's not an error, just return null
         if (error.code === 'PGRST116') {
           return null;
         }
+        console.error("Supabase error:", error);
         throw error;
       }
+      
       return data as Solution;
     },
-    {
-      enabled: !!battleId && !!user?.id,
-      retry: false, // Do not retry refetching if no solution is found
-    }
-  );
+    enabled: !!battleId && !!user?.id,
+    retry: false, // Do not retry refetching if no solution is found
+  });
 
   // Mutation to submit solution
-  const submitSolutionMutation = useMutation(
-    async () => {
+  const submitSolutionMutation = useMutation({
+    mutationFn: async () => {
       if (!battleId || !user?.id) throw new Error("Battle ID and User ID are required");
       
       const { data, error } = await supabase
@@ -220,31 +216,34 @@ const BattleArena = () => {
         console.error("Supabase error:", error);
         throw error;
       }
+      
       return data;
     },
-    {
-      onSuccess: () => {
-        toast.success("Solution submitted successfully!");
-        queryClient.invalidateQueries(['solution', battleId, user?.id]);
-      },
-      onError: (error: any) => {
-        console.error("Error submitting solution:", error);
-        toast.error("Failed to submit solution. Please try again.");
-      },
-      onSettled: () => {
-        setIsSubmitting(false);
-      }
+    onSuccess: () => {
+      toast.success("Solution submitted successfully!");
+      queryClient.invalidateQueries({ queryKey: ['solution', battleId, user?.id] });
+    },
+    onError: (error: any) => {
+      console.error("Error submitting solution:", error);
+      toast.error("Failed to submit solution. Please try again.");
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
     }
-  );
+  });
 
   // Mutation to join the battle
-  const joinBattleMutation = useMutation(
-    async () => {
+  const joinBattleMutation = useMutation({
+    mutationFn: async () => {
       if (!battleId || !user?.id) throw new Error("Battle ID and User ID are required");
       
       const { data, error } = await supabase
         .from('battles')
-        .update({ defender_id: user.id, status: 'in_progress', start_time: new Date().toISOString() })
+        .update({ 
+          defender_id: user.id, 
+          status: 'in_progress', 
+          start_time: new Date().toISOString() 
+        })
         .eq('id', battleId)
         .eq('status', 'waiting')
         .select()
@@ -254,28 +253,31 @@ const BattleArena = () => {
         console.error("Supabase error:", error);
         throw error;
       }
+      
       return data;
     },
-    {
-      onSuccess: () => {
-        toast.success("Joined battle successfully!");
-        queryClient.invalidateQueries(['battle', battleId]);
-      },
-      onError: (error: any) => {
-        console.error("Error joining battle:", error);
-        toast.error("Failed to join battle. Please try again.");
-      }
+    onSuccess: () => {
+      toast.success("Joined battle successfully!");
+      queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+    },
+    onError: (error: any) => {
+      console.error("Error joining battle:", error);
+      toast.error("Failed to join battle. Please try again.");
     }
-  );
+  });
 
   // Mutation to end the battle
-  const endBattleMutation = useMutation(
-    async (winnerId: string) => {
+  const endBattleMutation = useMutation({
+    mutationFn: async (winnerId: string) => {
       if (!battleId) throw new Error("Battle ID is required");
       
       const { data, error } = await supabase
         .from('battles')
-        .update({ status: 'completed', end_time: new Date().toISOString(), winner_id: winnerId })
+        .update({ 
+          status: 'completed', 
+          end_time: new Date().toISOString(), 
+          winner_id: winnerId 
+        })
         .eq('id', battleId)
         .select()
         .single();
@@ -284,23 +286,22 @@ const BattleArena = () => {
         console.error("Supabase error:", error);
         throw error;
       }
+      
       return data;
     },
-    {
-      onSuccess: () => {
-        toast.success("Battle ended successfully!");
-        queryClient.invalidateQueries(['battle', battleId]);
-      },
-      onError: (error: any) => {
-        console.error("Error ending battle:", error);
-        toast.error("Failed to end battle. Please try again.");
-      }
+    onSuccess: () => {
+      toast.success("Battle ended successfully!");
+      queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+    },
+    onError: (error: any) => {
+      console.error("Error ending battle:", error);
+      toast.error("Failed to end battle. Please try again.");
     }
-  );
+  });
 
   // Mutation to submit feedback
-  const submitFeedbackMutation = useMutation(
-    async () => {
+  const submitFeedbackMutation = useMutation({
+    mutationFn: async () => {
       if (!battleId || !user?.id) throw new Error("Battle ID and User ID are required");
       
       const { data, error } = await supabase
@@ -319,27 +320,29 @@ const BattleArena = () => {
         console.error("Supabase error:", error);
         throw error;
       }
+      
       return data;
     },
-    {
-      onSuccess: () => {
-        toast.success("Feedback submitted successfully!");
-        setFeedbackDialogOpen(false);
-      },
-      onError: (error: any) => {
-        console.error("Error submitting feedback:", error);
-        toast.error("Failed to submit feedback. Please try again.");
-      }
+    onSuccess: () => {
+      toast.success("Feedback submitted successfully!");
+      setFeedbackDialogOpen(false);
+    },
+    onError: (error: any) => {
+      console.error("Error submitting feedback:", error);
+      toast.error("Failed to submit feedback. Please try again.");
     }
-  );
+  });
 
-  const queryClient = useQueryClient();
-
+  // Update battle state based on battle data
   useEffect(() => {
     if (battle) {
       setIsBattleReady(battle.status === 'in_progress' || battle.status === 'completed');
       setIsBattleActive(battle.status === 'in_progress');
       setIsBattleOver(battle.status === 'completed');
+      
+      if (battle.language) {
+        setLanguage(battle.language);
+      }
 
       if (battle.status === 'completed') {
         const setParticipants = async () => {
@@ -386,12 +389,14 @@ const BattleArena = () => {
         setParticipants();
       }
     }
-  }, [battle, supabase]);
+  }, [battle]);
 
+  // Handle time remaining and battle end
   useEffect(() => {
     if (battle && battle.duration && battle.start_time && isBattleActive) {
       const calculateTimeRemaining = () => {
         if (!battle?.start_time) return;
+        
         const startTime = new Date(battle.start_time).getTime();
         const endTime = startTime + battle.duration * 60 * 1000;
         const now = new Date().getTime();
@@ -401,13 +406,16 @@ const BattleArena = () => {
           setTimeRemaining(Math.ceil(timeLeft / 1000));
         } else {
           setTimeRemaining(0);
-          if (!battle.winner_id) {
+          if (!battle.winner_id && user) {
             // Determine winner automatically if time runs out
             const determineWinner = async () => {
               if (!solution) {
-                await endBattleMutation.mutateAsync(battle.creator_id === user?.id ? battle.defender_id! : battle.creator_id);
+                const opponentId = battle.creator_id === user.id ? battle.defender_id : battle.creator_id;
+                if (opponentId) {
+                  await endBattleMutation.mutateAsync(opponentId);
+                }
               } else {
-                await endBattleMutation.mutateAsync(user.id!);
+                await endBattleMutation.mutateAsync(user.id);
               }
             };
             determineWinner();
@@ -422,7 +430,20 @@ const BattleArena = () => {
     }
   }, [battle, isBattleActive, user, solution, endBattleMutation]);
 
+  // Initialize code with solution if exists
+  useEffect(() => {
+    if (solution && solution.code) {
+      setCode(solution.code);
+    }
+  }, [solution]);
+
   const handleJoinBattle = async () => {
+    if (!user) {
+      toast.error("You must be logged in to join a battle");
+      navigate('/login');
+      return;
+    }
+    
     try {
       await joinBattleMutation.mutateAsync();
     } catch (error) {
@@ -431,6 +452,11 @@ const BattleArena = () => {
   };
 
   const handleSubmitSolution = async () => {
+    if (!code.trim()) {
+      toast.error("Your solution cannot be empty");
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       await submitSolutionMutation.mutateAsync();
@@ -465,14 +491,26 @@ const BattleArena = () => {
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor;
     setIsEditorReady(true);
+  };
+
+  if (isBattleLoading || isProblemLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="w-10 h-10 animate-spin text-icon-accent" />
+        <span className="ml-2 text-lg">Loading battle details...</span>
+      </div>
+    );
   }
 
-  if (isBattleLoading || isProblemLoading || isCreatorLoading || isDefenderLoading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
-  }
-
-  if (battleError || problemError || creatorError || defenderError) {
-    return <div className="flex justify-center items-center h-screen">Error: Could not load battle.</div>;
+  if (!battle) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen">
+        <XCircle className="w-16 h-16 text-red-500 mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Battle not found</h2>
+        <p className="text-icon-light-gray mb-6">The battle you're looking for doesn't exist or has been deleted.</p>
+        <Button onClick={() => navigate('/join-battle')}>Browse Battles</Button>
+      </div>
+    );
   }
 
   const isCreator = user?.id === battle?.creator_id;
@@ -485,15 +523,17 @@ const BattleArena = () => {
   const isRated = battle?.is_rated;
 
   const getLanguageMode = (language: string) => {
-    switch (language) {
+    switch (language.toLowerCase()) {
       case 'javascript':
         return 'javascript';
       case 'python':
         return 'python';
       case 'java':
         return 'java';
+      case 'c++':
       case 'cpp':
         return 'cpp';
+      case 'c#':
       case 'csharp':
         return 'csharp';
       default:
@@ -502,7 +542,7 @@ const BattleArena = () => {
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
+    switch (difficulty.toLowerCase()) {
       case 'easy':
         return 'bg-green-500';
       case 'medium':
@@ -515,7 +555,7 @@ const BattleArena = () => {
   };
 
   const getDifficultyPoints = (difficulty: string) => {
-    switch (difficulty) {
+    switch (difficulty.toLowerCase()) {
       case 'easy':
         return '10';
       case 'medium':
@@ -527,16 +567,16 @@ const BattleArena = () => {
     }
   };
 
-  const getStatusIcon = (status: string): LucideIcon => {
+  const getStatusIcon = (status: string): React.ReactNode => {
     switch (status) {
       case 'waiting':
-        return HelpCircle;
+        return <HelpCircle className="w-4 h-4" />;
       case 'in_progress':
-        return Loader2;
+        return <Loader2 className="w-4 h-4 animate-spin" />;
       case 'completed':
-        return ShieldCheck;
+        return <ShieldCheck className="w-4 h-4" />;
       default:
-        return HelpCircle;
+        return <HelpCircle className="w-4 h-4" />;
     }
   };
 
@@ -573,7 +613,7 @@ const BattleArena = () => {
                       {problem?.title}
                     </CardTitle>
                     <CardDescription>
-                      Solve the problem using the selected language.
+                      Solve the problem using {battle?.language}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -584,7 +624,7 @@ const BattleArena = () => {
                     <div className="space-y-2">
                       <h3 className="text-md font-semibold">Examples</h3>
                       <ul className="list-disc pl-5 text-sm text-icon-light-gray">
-                        {problem?.examples.map((example, index) => (
+                        {problem?.examples?.map((example, index) => (
                           <li key={index}>{example}</li>
                         ))}
                       </ul>
@@ -592,7 +632,7 @@ const BattleArena = () => {
                     <div className="space-y-2">
                       <h3 className="text-md font-semibold">Constraints</h3>
                       <ul className="list-disc pl-5 text-sm text-icon-light-gray">
-                        {problem?.constraints.map((constraint, index) => (
+                        {problem?.constraints?.map((constraint, index) => (
                           <li key={index}>{constraint}</li>
                         ))}
                       </ul>
@@ -662,14 +702,16 @@ const BattleArena = () => {
                           <span className="font-medium">Status</span>
                           <div className="flex items-center gap-2">
                             <p className="text-xs opacity-80">{battle?.status}</p>
-                            <getStatusIcon(battle?.status || 'waiting') className="w-4 h-4" />
+                            {getStatusIcon(battle?.status || 'waiting')}
                           </div>
                         </div>
                       </div>
                       <div>
                         <div className="text-sm text-icon-light-gray">
                           <span className="font-medium">Created At</span>
-                          <p className="text-xs opacity-80">{format(new Date(battle?.created_at), 'MMM dd, yyyy HH:mm')}</p>
+                          <p className="text-xs opacity-80">
+                            {battle?.created_at && format(new Date(battle.created_at), 'MMM dd, yyyy HH:mm')}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -691,7 +733,8 @@ const BattleArena = () => {
               <Editor
                 height="500px"
                 defaultLanguage={getLanguageMode(battle?.language || 'javascript')}
-                defaultValue=""
+                language={getLanguageMode(battle?.language || 'javascript')}
+                value={code}
                 theme="vs-dark"
                 onChange={(value) => {
                   if (value) {
@@ -715,8 +758,8 @@ const BattleArena = () => {
               )}
               <div>
                 {canJoin && (
-                  <Button onClick={handleJoinBattle} disabled={joinBattleMutation.isLoading}>
-                    {joinBattleMutation.isLoading ? (
+                  <Button onClick={handleJoinBattle} disabled={joinBattleMutation.isPending}>
+                    {joinBattleMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Joining...
@@ -732,7 +775,7 @@ const BattleArena = () => {
                 {canSubmit && (
                   <Button
                     onClick={handleSubmitSolution}
-                    disabled={isSubmitting || !isEditorReady}
+                    disabled={isSubmitting || !isEditorReady || !code.trim()}
                   >
                     {isSubmitting ? (
                       <>
@@ -757,24 +800,30 @@ const BattleArena = () => {
                     <DropdownMenuContent className="bg-icon-dark-gray border-icon-gray">
                       <DropdownMenuLabel>Select Winner</DropdownMenuLabel>
                       <DropdownMenuItem onClick={() => handleEndBattle(battle.creator_id)}>
-                        <Avatar className="mr-2 h-5 w-5">
-                          <AvatarImage src={creator?.avatar_url || ""} />
-                          <AvatarFallback>{creator?.name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        {creator?.name}
+                        <div className="flex items-center">
+                          <Avatar className="mr-2 h-5 w-5">
+                            <AvatarImage src={creator?.avatar_url || ""} />
+                            <AvatarFallback>{creator?.name?.charAt(0) || "C"}</AvatarFallback>
+                          </Avatar>
+                          <span>{creator?.name || "Creator"}</span>
+                        </div>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleEndBattle(battle.defender_id!)}>
-                        <Avatar className="mr-2 h-5 w-5">
-                          <AvatarImage src={defender?.avatar_url || ""} />
-                          <AvatarFallback>{defender?.name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        {defender?.name}
-                      </DropdownMenuItem>
+                      {battle.defender_id && (
+                        <DropdownMenuItem onClick={() => handleEndBattle(battle.defender_id)}>
+                          <div className="flex items-center">
+                            <Avatar className="mr-2 h-5 w-5">
+                              <AvatarImage src={defender?.avatar_url || ""} />
+                              <AvatarFallback>{defender?.name?.charAt(0) || "D"}</AvatarFallback>
+                            </Avatar>
+                            <span>{defender?.name || "Defender"}</span>
+                          </div>
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
                 {canEnd && isDefender && (
-                  <Button onClick={() => handleEndBattle(user.id!)}>
+                  <Button onClick={() => user && handleEndBattle(user.id)}>
                     <XCircle className="mr-2 h-4 w-4" />
                     End Battle
                   </Button>
@@ -807,7 +856,7 @@ const BattleArena = () => {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={winner.avatar_url || ""} />
-                          <AvatarFallback>{winner.name?.charAt(0)}</AvatarFallback>
+                          <AvatarFallback>{winner.name?.charAt(0) || "W"}</AvatarFallback>
                         </Avatar>
                         <p className="text-xs opacity-80">{winner.name}</p>
                       </div>
@@ -823,7 +872,7 @@ const BattleArena = () => {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={loser.avatar_url || ""} />
-                          <AvatarFallback>{loser.name?.charAt(0)}</AvatarFallback>
+                          <AvatarFallback>{loser.name?.charAt(0) || "L"}</AvatarFallback>
                         </Avatar>
                         <p className="text-xs opacity-80">{loser.name}</p>
                       </div>
@@ -869,42 +918,47 @@ const BattleArena = () => {
       )}
 
       {/* Feedback Dialog */}
-      <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
-        <DialogTrigger asChild>
-          <Button variant="outline">Submit Feedback</Button>
-        </DialogTrigger>
-        <DialogContent className="bg-icon-dark-gray border-icon-gray">
-          <DialogHeader>
-            <DialogTitle>Solution Feedback</DialogTitle>
-            <DialogDescription>
-              Share your thoughts on the provided solution.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="feedback" className="text-right">
-                Feedback
-              </Label>
-              <Textarea
-                id="feedback"
-                value={solutionFeedback}
-                onChange={(e) => setSolutionFeedback(e.target.value)}
-                className="col-span-3 icon-input"
-              />
+      <div className="mt-6">
+        <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">Submit Feedback</Button>
+          </DialogTrigger>
+          <DialogContent className="bg-icon-dark-gray border-icon-gray">
+            <DialogHeader>
+              <DialogTitle>Solution Feedback</DialogTitle>
+              <DialogDescription>
+                Share your thoughts on the provided solution.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="feedback" className="text-sm font-medium">
+                  Feedback
+                </label>
+                <Textarea
+                  id="feedback"
+                  value={solutionFeedback}
+                  onChange={(e) => setSolutionFeedback(e.target.value)}
+                  className="min-h-[100px] bg-icon-gray"
+                  placeholder="Share your thoughts about the battle or solution"
+                />
+              </div>
             </div>
-          </div>
-          <Button onClick={() => submitFeedbackMutation.mutate()} disabled={submitFeedbackMutation.isLoading}>
-            {submitFeedbackMutation.isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              "Submit Feedback"
-            )}
-          </Button>
-        </DialogContent>
-      </Dialog>
+            <div className="flex justify-end">
+              <Button onClick={() => submitFeedbackMutation.mutate()} disabled={submitFeedbackMutation.isPending}>
+                {submitFeedbackMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Feedback"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 };
