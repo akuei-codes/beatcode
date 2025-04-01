@@ -20,69 +20,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-
-// Mock problem data for development purposes
-const mockProblems = [
-  {
-    id: '1',
-    title: 'Two Sum',
-    question: 'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice. You can return the answer in any order.',
-    examples: [
-      'Input: nums = [2,7,11,15], target = 9',
-      'Output: [0,1]',
-      'Input: nums = [3,2,4], target = 6',
-      'Output: [1,2]',
-      'Input: nums = [3,3], target = 6',
-      'Output: [0,1]'
-    ],
-    constraints: [
-      '2 <= nums.length <= 10^4',
-      '-10^9 <= nums[i] <= 10^9',
-      '-10^9 <= target <= 10^9',
-      'Only one valid answer exists.'
-    ]
-  },
-  {
-    id: '2',
-    title: 'Valid Parentheses',
-    question: 'Given a string s containing just the characters \'(\', \')\', \'{\', \'}\', \'[\' and \']\', determine if the input string is valid. An input string is valid if: Open brackets must be closed by the same type of brackets. Open brackets must be closed in the correct order. Every close bracket has a corresponding open bracket of the same type.',
-    examples: [
-      'Input: s = "()"',
-      'Output: true',
-      'Input: s = "()[]{}"',
-      'Output: true',
-      'Input: s = "(]"',
-      'Output: false'
-    ],
-    constraints: [
-      '1 <= s.length <= 10^4',
-      's consists of parentheses only \'()[]{}\''
-    ]
-  }
-];
-
-interface Problem {
-  id: string;
-  title: string;
-  question: string;
-  examples: string[];
-  constraints: string[];
-}
-
-interface BattleDetails {
-  id: string;
-  language: string;
-  difficulty: string;
-  duration: number;
-  isRated: boolean;
-  createdAt: string;
-  problemId: number;
-}
+import { supabase } from '@/lib/supabase';
+import { getProblemById, Problem } from '@/lib/problems';
+import { useAuth } from '@/contexts/AuthContext';
+import { Battle } from '@/lib/supabase';
 
 const BattleArena = () => {
   const { battleId } = useParams<{ battleId: string }>();
   const navigate = useNavigate();
-  const [battleDetails, setBattleDetails] = useState<BattleDetails | null>(null);
+  const { user } = useAuth();
+  const [battleDetails, setBattleDetails] = useState<Battle | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -90,44 +37,148 @@ const BattleArena = () => {
   const [battleResult, setBattleResult] = useState<'won' | 'lost' | 'tie' | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
     const loadBattleData = async () => {
+      if (!battleId) {
+        toast.error("Invalid battle ID");
+        navigate('/join-battle');
+        return;
+      }
+      
       try {
-        // In a real app, this would call an API to get the battle details
-        const storedBattle = localStorage.getItem('currentBattle');
+        setIsLoading(true);
         
-        if (storedBattle) {
-          const battle = JSON.parse(storedBattle);
-          setBattleDetails(battle);
+        // Fetch battle details from Supabase
+        const { data: battle, error } = await supabase
+          .from('battles')
+          .select('*')
+          .eq('id', battleId)
+          .single();
           
-          // Set the problem
-          // In a real app, this would fetch the problem based on the problemId
-          const randomProblemIndex = Math.floor(Math.random() * mockProblems.length);
-          setProblem(mockProblems[randomProblemIndex]);
-          
-          // Initialize timer
-          setTimeLeft(battle.duration * 60); // Convert minutes to seconds
-          setIsTimerActive(true);
-        } else {
-          toast.error("Battle data not found");
-          navigate('/join-battle');
+        if (error) {
+          throw error;
         }
+        
+        if (!battle) {
+          toast.error("Battle not found");
+          navigate('/join-battle');
+          return;
+        }
+        
+        setBattleDetails(battle);
+        
+        // Get the problem by ID
+        const problemData = getProblemById(battle.problem_id);
+        
+        if (!problemData) {
+          toast.error("Problem not found");
+          navigate('/join-battle');
+          return;
+        }
+        
+        setProblem(problemData);
+        
+        // Setup timer
+        if (battle.status === 'in_progress' && battle.start_time) {
+          const startTime = new Date(battle.start_time).getTime();
+          const endTime = new Date(startTime + (battle.duration * 60 * 1000)).getTime();
+          const now = new Date().getTime();
+          const remainingTime = Math.max(0, Math.floor((endTime - now) / 1000));
+          
+          setTimeLeft(remainingTime);
+          setIsTimerActive(true);
+        } else if (battle.status === 'waiting') {
+          // If you're the defender and the battle is waiting
+          if (user && battle.creator_id !== user.id && !battle.defender_id) {
+            // Join the battle as defender
+            await joinBattle(battle.id);
+          }
+          
+          setTimeLeft(battle.duration * 60);
+        }
+        
       } catch (error) {
         console.error("Error loading battle:", error);
         toast.error("Failed to load battle");
         navigate('/join-battle');
+      } finally {
+        setIsLoading(false);
       }
     };
     
-    loadBattleData();
+    if (battleId) {
+      loadBattleData();
+    }
+    
+    const battleSubscription = supabase
+      .channel(`battle_${battleId}`)
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'battles',
+        filter: `id=eq.${battleId}` 
+      }, (payload) => {
+        const updatedBattle = payload.new as Battle;
+        setBattleDetails(updatedBattle);
+        
+        // If battle just started
+        if (updatedBattle.status === 'in_progress' && updatedBattle.start_time) {
+          const startTime = new Date(updatedBattle.start_time).getTime();
+          const endTime = new Date(startTime + (updatedBattle.duration * 60 * 1000)).getTime();
+          const now = new Date().getTime();
+          const remainingTime = Math.max(0, Math.floor((endTime - now) / 1000));
+          
+          setTimeLeft(remainingTime);
+          setIsTimerActive(true);
+        }
+        
+        // If battle just ended
+        if (updatedBattle.status === 'completed') {
+          handleBattleEnd(updatedBattle);
+        }
+      })
+      .subscribe();
     
     return () => {
+      battleSubscription.unsubscribe();
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
     };
-  }, [battleId, navigate]);
+  }, [battleId, navigate, user]);
+  
+  const joinBattle = async (battleId: string) => {
+    if (!user) {
+      toast.error("You must be logged in to join a battle");
+      navigate('/login');
+      return;
+    }
+    
+    try {
+      // Update battle with defender and start time
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('battles')
+        .update({
+          defender_id: user.id,
+          status: 'in_progress',
+          start_time: now
+        })
+        .eq('id', battleId)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      toast.success("You've joined the battle!");
+      setIsTimerActive(true);
+    } catch (error) {
+      console.error("Error joining battle:", error);
+      toast.error("Failed to join battle");
+    }
+  };
   
   // Start timer
   useEffect(() => {
@@ -138,7 +189,9 @@ const BattleArena = () => {
             return prev - 1;
           } else {
             clearInterval(timerRef.current as NodeJS.Timeout);
-            handleBattleEnd();
+            if (battleDetails && battleDetails.status === 'in_progress') {
+              handleSubmitSolution();
+            }
             return 0;
           }
         });
@@ -150,7 +203,7 @@ const BattleArena = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [timeLeft, isTimerActive]);
+  }, [timeLeft, isTimerActive, battleDetails]);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -167,28 +220,99 @@ const BattleArena = () => {
     // In a real app, this would send the code to a backend for execution
   };
   
-  const handleSubmitSolution = () => {
-    if (code.trim() === '') {
-      toast.error("Code cannot be empty");
-      return;
-    }
+  const handleSubmitSolution = async () => {
+    if (!user || !battleDetails) return;
     
-    // In a real app, this would submit the solution to the backend
-    toast.success("Solution submitted");
-    handleBattleEnd();
-  };
-  
-  const handleBattleEnd = () => {
     // Stop the timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
     
-    // Determine the battle result (random for demo)
-    const result = Math.random() > 0.5 ? 'won' : 'lost';
-    setBattleResult(result);
+    try {
+      // Save the solution
+      const { error: solutionError } = await supabase
+        .from('solutions')
+        .insert({
+          battle_id: battleDetails.id,
+          user_id: user.id,
+          code
+        });
+      
+      if (solutionError) throw solutionError;
+      
+      // Check if both solutions are submitted
+      const { data: solutions, error: fetchError } = await supabase
+        .from('solutions')
+        .select('*')
+        .eq('battle_id', battleDetails.id);
+      
+      if (fetchError) throw fetchError;
+      
+      // For demo purposes, randomly determine the winner 
+      // In a real app, you'd evaluate the solutions
+      if (solutions && solutions.length >= 2) {
+        // Both players have submitted, determine winner randomly for demo
+        const winnerId = Math.random() > 0.5 ? battleDetails.creator_id : battleDetails.defender_id;
+        
+        // Complete the battle
+        const now = new Date().toISOString();
+        await supabase
+          .from('battles')
+          .update({
+            status: 'completed',
+            end_time: now,
+            winner_id: winnerId
+          })
+          .eq('id', battleDetails.id);
+          
+        // Update ratings if rated battle
+        if (battleDetails.is_rated) {
+          const pointsChange = getDifficultyPoints(battleDetails.difficulty);
+          
+          if (winnerId === user.id) {
+            // User won
+            await supabase.rpc('update_rating', { 
+              user_id: user.id,
+              rating_change: pointsChange
+            });
+          } else {
+            // User lost
+            await supabase.rpc('update_rating', { 
+              user_id: user.id,
+              rating_change: -pointsChange
+            });
+          }
+        }
+      }
+      
+      toast.success("Solution submitted successfully");
+      
+    } catch (error) {
+      console.error("Error submitting solution:", error);
+      toast.error("Failed to submit solution");
+    }
+  };
+  
+  const handleBattleEnd = (battle: Battle) => {
+    // Stop the timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
     
-    // Show the result dialog
+    // Determine the battle result
+    if (!user) return;
+    
+    let result: 'won' | 'lost' | 'tie' | null = null;
+    
+    if (battle.winner_id === user.id) {
+      result = 'won';
+    } else if (battle.winner_id && battle.winner_id !== user.id) {
+      result = 'lost';
+    } else {
+      result = 'tie';
+    }
+    
+    setBattleResult(result);
     setShowResultDialog(true);
   };
   
@@ -214,7 +338,7 @@ const BattleArena = () => {
     }
   };
 
-  if (!battleDetails || !problem) {
+  if (isLoading || !battleDetails || !problem) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-icon-accent"></div>

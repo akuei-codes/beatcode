@@ -28,9 +28,13 @@ import {
 } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { supabase } from '@/lib/supabase';
+import { getRandomProblem } from '@/lib/problems';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CreateBattle = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [language, setLanguage] = useState('');
   const [difficulty, setDifficulty] = useState('');
   const [duration, setDuration] = useState('');
@@ -44,33 +48,43 @@ const CreateBattle = () => {
       return;
     }
 
+    if (!user) {
+      toast.error("You must be logged in to create a battle");
+      navigate('/login');
+      return;
+    }
+
     setIsCreating(true);
 
-    // Simulate API call to create battle
     try {
-      // In a real app, this would be an API call to create the battle
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Get a random problem
+      const randomProblem = getRandomProblem();
       
-      const battleData = {
-        id: Math.random().toString(36).substring(2, 9),
-        language,
-        difficulty,
-        duration: parseInt(duration),
-        isRated,
-        createdAt: new Date().toISOString(),
-        problemId: Math.floor(Math.random() * 1540) // Random problem ID
-      };
-
-      // Store battle data in localStorage (for demo purposes)
-      const existingBattles = JSON.parse(localStorage.getItem('battles') || '[]');
-      localStorage.setItem('battles', JSON.stringify([...existingBattles, battleData]));
+      // Create battle in Supabase
+      const { data: battle, error } = await supabase
+        .from('battles')
+        .insert([
+          {
+            creator_id: user.id,
+            language,
+            difficulty,
+            duration: parseInt(duration),
+            is_rated: isRated,
+            status: 'waiting',
+            problem_id: randomProblem.id
+          }
+        ])
+        .select()
+        .single();
       
-      // Store current battle data
-      localStorage.setItem('currentBattle', JSON.stringify(battleData));
+      if (error) {
+        throw error;
+      }
       
       toast.success("Battle created successfully!");
-      navigate(`/battle/${battleData.id}`);
+      navigate(`/battle/${battle.id}`);
     } catch (error) {
+      console.error('Error creating battle:', error);
       toast.error("Failed to create battle. Please try again.");
     } finally {
       setIsCreating(false);
