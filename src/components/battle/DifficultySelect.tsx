@@ -10,9 +10,9 @@ import {
 import { Label } from "@/components/ui/label";
 
 export const difficultyOptions = [
-  { value: 'easy', label: 'Easy', points: 10 },
-  { value: 'medium', label: 'Medium', points: 25 },
-  { value: 'hard', label: 'Hard', points: 50 }
+  { value: 'Easy', label: 'Easy', points: 10 },
+  { value: 'Medium', label: 'Medium', points: 25 },
+  { value: 'Hard', label: 'Hard', points: 50 }
 ];
 
 interface DifficultySelectProps {

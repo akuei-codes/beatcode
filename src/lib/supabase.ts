@@ -23,14 +23,14 @@ export type Battle = {
   defender_id: string | null;
   problem_id: number;
   programming_language: string;
-  difficulty: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';  // Updated to match the database schema
   duration: number;
-  battle_type: 'Rated' | 'Casual';  // Using battle_type as in DB schema
+  battle_type: 'Rated' | 'Casual';
   status: 'open' | 'in_progress' | 'completed';
   winner_id: string | null;
   created_at: string;
-  started_at: string | null;  // Using started_at instead of start_time
-  ended_at: string | null;    // Using ended_at instead of end_time
+  started_at: string | null;
+  ended_at: string | null;
 };
 
 export type Submission = {

@@ -51,7 +51,7 @@ const CreateBattle = () => {
           {
             creator_id: user.id,
             programming_language: config.language,
-            difficulty: config.difficulty,
+            difficulty: config.difficulty, // This will now have the correct case (Easy, Medium, Hard)
             duration: parseInt(config.duration),
             battle_type: config.battleType,
             status: 'open',
@@ -73,7 +73,7 @@ const CreateBattle = () => {
       console.log("Battle created successfully:", battle);
       toast.success("Battle created successfully!");
       
-      // Ensure we navigate to the battle arena with the battle ID
+      // Navigate to the battle arena with the battle ID
       navigate(`/battle/${battle.id}`);
     } catch (error: any) {
       console.error('Error creating battle:', error);

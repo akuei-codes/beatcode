@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -114,7 +113,7 @@ const BattleArena = () => {
 
   // Fetch problem details
   const { data: problem, isLoading: isProblemLoading } = useQuery({
-    queryKey: ['problem', battle?.problem_id],
+    queryKey: ['problem', battle?.problem_id ? Number(battle.problem_id) : 0],
     queryFn: async () => {
       if (!battle?.problem_id) throw new Error("Problem ID is required");
       return getProblemById(battle.problem_id);
