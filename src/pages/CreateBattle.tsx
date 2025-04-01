@@ -7,7 +7,7 @@ import {
   Timer, 
   Flag, 
   ArrowRight, 
-  CheckCircle2
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,7 @@ const CreateBattle = () => {
             language,
             difficulty,
             duration: parseInt(duration),
-            is_rated: isRated,
+            is_rated: isRated, // This matches the DB field name
             status: 'waiting',
             problem_id: randomProblem.id
           }
@@ -78,7 +78,12 @@ const CreateBattle = () => {
         .single();
       
       if (error) {
+        console.error("Supabase error:", error);
         throw error;
+      }
+      
+      if (!battle) {
+        throw new Error("No battle data returned");
       }
       
       toast.success("Battle created successfully!");
@@ -216,7 +221,7 @@ const CreateBattle = () => {
             >
               {isCreating ? (
                 <>
-                  <CheckCircle2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...
                 </>
               ) : (
