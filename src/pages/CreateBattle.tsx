@@ -16,7 +16,7 @@ const CreateBattle = () => {
     language: '',
     difficulty: '',
     duration: '',
-    isRated: true
+    battleType: 'Rated'
   });
 
   const handleCreateBattle = async (config: BattleConfig) => {
@@ -44,17 +44,17 @@ const CreateBattle = () => {
       
       console.log("Creating battle with problem:", randomProblem.id);
       
-      // Create battle in Supabase
+      // Create battle in Supabase with updated schema
       const { data: battle, error } = await supabase
         .from('battles')
         .insert([
           {
             creator_id: user.id,
-            language: config.language,
+            programming_language: config.language,
             difficulty: config.difficulty,
             duration: parseInt(config.duration),
-            is_rated: config.isRated,
-            status: 'waiting',
+            battle_type: config.battleType,
+            status: 'open',
             problem_id: randomProblem.id
           }
         ])
@@ -103,6 +103,7 @@ const CreateBattle = () => {
           language={formState.language}
           difficulty={formState.difficulty}
           duration={formState.duration}
+          battleType={formState.battleType}
         />
       </div>
     </div>

@@ -15,9 +15,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { supabase, Battle } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Battle } from '@/lib/supabase';
 
 const JoinBattle = () => {
   const navigate = useNavigate();
@@ -39,26 +38,26 @@ const JoinBattle = () => {
   
   // Difficulty color mapping
   const difficultyColors: Record<string, string> = {
-    'easy': 'bg-emerald-500/20 text-emerald-400',
-    'medium': 'bg-amber-500/20 text-amber-400',
-    'hard': 'bg-red-500/20 text-red-400'
+    'Easy': 'bg-emerald-500/20 text-emerald-400',
+    'Medium': 'bg-amber-500/20 text-amber-400',
+    'Hard': 'bg-red-500/20 text-red-400'
   };
   
   // Difficulty points mapping
   const difficultyPoints: Record<string, number> = {
-    'easy': 10,
-    'medium': 25,
-    'hard': 50
+    'Easy': 10,
+    'Medium': 25,
+    'Hard': 50
   };
 
   const fetchBattles = async () => {
     setIsLoading(true);
     try {
-      // Fetch battles that are in 'waiting' status (not yet started)
+      // Fetch battles that are in 'open' status (not yet started)
       const { data, error } = await supabase
         .from('battles')
         .select('*')
-        .eq('status', 'waiting')
+        .eq('status', 'open')
         .is('defender_id', null)
         .order('created_at', { ascending: false });
       
@@ -96,8 +95,8 @@ const JoinBattle = () => {
     // Apply search filter
     if (searchTerm) {
       result = result.filter(battle =>
-        battle.language.includes(searchTerm.toLowerCase()) ||
-        languageLabels[battle.language]?.toLowerCase().includes(searchTerm.toLowerCase())
+        battle.programming_language.includes(searchTerm.toLowerCase()) ||
+        languageLabels[battle.programming_language]?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
@@ -125,7 +124,7 @@ const JoinBattle = () => {
         .update({
           defender_id: user.id,
           status: 'in_progress',
-          start_time: new Date().toISOString()
+          started_at: new Date().toISOString()
         })
         .eq('id', battle.id)
         .select()
@@ -199,23 +198,23 @@ const JoinBattle = () => {
               All
             </Button>
             <Button
-              variant={difficultyFilter === 'easy' ? 'default' : 'outline'}
-              className={difficultyFilter === 'easy' ? 'bg-emerald-500 text-black' : 'border-emerald-500/50 text-emerald-400'}
-              onClick={() => setDifficultyFilter('easy')}
+              variant={difficultyFilter === 'Easy' ? 'default' : 'outline'}
+              className={difficultyFilter === 'Easy' ? 'bg-emerald-500 text-black' : 'border-emerald-500/50 text-emerald-400'}
+              onClick={() => setDifficultyFilter('Easy')}
             >
               Easy
             </Button>
             <Button
-              variant={difficultyFilter === 'medium' ? 'default' : 'outline'}
-              className={difficultyFilter === 'medium' ? 'bg-amber-500 text-black' : 'border-amber-500/50 text-amber-400'}
-              onClick={() => setDifficultyFilter('medium')}
+              variant={difficultyFilter === 'Medium' ? 'default' : 'outline'}
+              className={difficultyFilter === 'Medium' ? 'bg-amber-500 text-black' : 'border-amber-500/50 text-amber-400'}
+              onClick={() => setDifficultyFilter('Medium')}
             >
               Medium
             </Button>
             <Button
-              variant={difficultyFilter === 'hard' ? 'default' : 'outline'}
-              className={difficultyFilter === 'hard' ? 'bg-red-500 text-black' : 'border-red-500/50 text-red-400'}
-              onClick={() => setDifficultyFilter('hard')}
+              variant={difficultyFilter === 'Hard' ? 'default' : 'outline'}
+              className={difficultyFilter === 'Hard' ? 'bg-red-500 text-black' : 'border-red-500/50 text-red-400'}
+              onClick={() => setDifficultyFilter('Hard')}
             >
               Hard
             </Button>
@@ -247,12 +246,12 @@ const JoinBattle = () => {
                   <div className="mb-4 md:mb-0">
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[battle.difficulty]}`}>
-                        {battle.difficulty.charAt(0).toUpperCase() + battle.difficulty.slice(1)}
+                        {battle.difficulty}
                       </span>
                       <span className="text-xs bg-icon-accent/20 text-icon-accent px-2 py-0.5 rounded-full">
                         {difficultyPoints[battle.difficulty]} points
                       </span>
-                      {battle.is_rated && (
+                      {battle.battle_type === 'Rated' && (
                         <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
                           Rated
                         </span>
@@ -260,7 +259,7 @@ const JoinBattle = () => {
                     </div>
                     <h3 className="text-lg font-medium flex items-center gap-2">
                       <Code size={18} className="text-icon-accent" />
-                      <span>Battle in {languageLabels[battle.language] || battle.language}</span>
+                      <span>Battle in {languageLabels[battle.programming_language] || battle.programming_language}</span>
                     </h3>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-icon-light-gray">
                       <div className="flex items-center gap-1.5">
@@ -273,7 +272,7 @@ const JoinBattle = () => {
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Shield size={14} />
-                        <span>{battle.is_rated ? 'Rated' : 'Casual'}</span>
+                        <span>{battle.battle_type}</span>
                       </div>
                     </div>
                   </div>

@@ -2,11 +2,13 @@
 import { supabase } from './supabase';
 
 export interface Problem {
-  id: string;
+  id: number;
   title: string;
   question: string;
   examples: string[];
   constraints: string[];
+  difficulty: string;
+  created_at?: string;
 }
 
 export async function getRandomProblem(): Promise<Problem | null> {
@@ -38,7 +40,7 @@ export async function getRandomProblem(): Promise<Problem | null> {
   }
 }
 
-export async function getProblemById(id: string): Promise<Problem | null> {
+export async function getProblemById(id: number): Promise<Problem | null> {
   try {
     const { data, error } = await supabase
       .from('problems')

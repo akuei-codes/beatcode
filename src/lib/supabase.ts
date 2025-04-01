@@ -8,8 +8,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type Profile = {
   id: string;
+  username: string;
   email: string | null;
-  name: string | null;
   avatar_url: string | null;
   rating: number;
   created_at: string;
@@ -19,22 +19,24 @@ export type Battle = {
   id: string;
   creator_id: string;
   defender_id: string | null;
-  language: string;
+  problem_id: number;
+  programming_language: string;
   difficulty: string;
   duration: number;
-  is_rated: boolean;
-  status: 'waiting' | 'in_progress' | 'completed';
-  start_time: string | null;
-  end_time: string | null;
-  problem_id: string;
+  battle_type: 'Rated' | 'Casual';
+  status: 'open' | 'in_progress' | 'completed';
   winner_id: string | null;
   created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
 };
 
-export type Solution = {
+export type Submission = {
   id: string;
   battle_id: string;
   user_id: string;
   code: string;
+  language: string;
+  status: 'pending' | 'correct' | 'incorrect';
   submitted_at: string;
 };

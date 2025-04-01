@@ -13,7 +13,7 @@ import {
 import { LanguageSelect } from './LanguageSelect';
 import { DifficultySelect } from './DifficultySelect';
 import { DurationSelect } from './DurationSelect';
-import { RatedSwitch } from './RatedSwitch';
+import { BattleTypeSwitch } from './BattleTypeSwitch';
 
 interface BattleConfigFormProps {
   onSubmit: (config: BattleConfig) => Promise<void>;
@@ -25,22 +25,22 @@ export interface BattleConfig {
   language: string;
   difficulty: string;
   duration: string;
-  isRated: boolean;
+  battleType: 'Rated' | 'Casual';
 }
 
 export const BattleConfigForm = ({ onSubmit, onChange, isLoading = false }: BattleConfigFormProps) => {
   const [language, setLanguage] = useState('');
   const [difficulty, setDifficulty] = useState('');
   const [duration, setDuration] = useState('');
-  const [isRated, setIsRated] = useState(true);
+  const [battleType, setBattleType] = useState<'Rated' | 'Casual'>('Rated');
   const [isCreating, setIsCreating] = useState(false);
 
   // Notify parent of changes
   useEffect(() => {
     if (onChange) {
-      onChange({ language, difficulty, duration, isRated });
+      onChange({ language, difficulty, duration, battleType });
     }
-  }, [language, difficulty, duration, isRated, onChange]);
+  }, [language, difficulty, duration, battleType, onChange]);
 
   const handleSubmit = async () => {
     if (isCreating) return; // Prevent multiple submissions
@@ -51,7 +51,7 @@ export const BattleConfigForm = ({ onSubmit, onChange, isLoading = false }: Batt
         language,
         difficulty,
         duration,
-        isRated
+        battleType
       });
     } catch (error) {
       console.error("Error in form submission:", error);
@@ -72,8 +72,8 @@ export const BattleConfigForm = ({ onSubmit, onChange, isLoading = false }: Batt
     setDuration(value);
   };
 
-  const handleRatedChange = (value: boolean) => {
-    setIsRated(value);
+  const handleBattleTypeChange = (value: boolean) => {
+    setBattleType(value ? 'Rated' : 'Casual');
   };
 
   // Use the parent loading state if provided
@@ -95,7 +95,7 @@ export const BattleConfigForm = ({ onSubmit, onChange, isLoading = false }: Batt
         <LanguageSelect value={language} onValueChange={handleLanguageChange} />
         <DifficultySelect value={difficulty} onValueChange={handleDifficultyChange} />
         <DurationSelect value={duration} onValueChange={handleDurationChange} />
-        <RatedSwitch checked={isRated} onCheckedChange={handleRatedChange} />
+        <BattleTypeSwitch checked={battleType === 'Rated'} onCheckedChange={handleBattleTypeChange} />
       </CardContent>
       <CardFooter className="flex justify-end">
         <Button 
