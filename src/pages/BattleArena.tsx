@@ -57,14 +57,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 // Import types from supabase.ts
-import type { Profile, Battle, Solution } from '@/lib/supabase';
+import type { Profile, Battle, Submission, Solution } from '@/lib/supabase';
 
 // Define interfaces
 type StatusIconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 interface Participant {
   id: string;
-  name: string | null;
+  username: string | null;  // Changed from name to username
   avatar_url: string | null;
   rating: number;
 }
@@ -173,7 +173,7 @@ const BattleArena = () => {
       if (!battleId || !user?.id) throw new Error("Battle ID and User ID are required");
       
       const { data, error } = await supabase
-        .from('solutions')
+        .from('submissions')  // Changed from solutions to submissions
         .select('*')
         .eq('battle_id', battleId)
         .eq('user_id', user.id)
@@ -188,7 +188,7 @@ const BattleArena = () => {
         throw error;
       }
       
-      return data as Solution;
+      return data as Submission;
     },
     enabled: !!battleId && !!user?.id,
     retry: false, // Do not retry refetching if no solution is found
@@ -200,12 +200,14 @@ const BattleArena = () => {
       if (!battleId || !user?.id) throw new Error("Battle ID and User ID are required");
       
       const { data, error } = await supabase
-        .from('solutions')
+        .from('submissions')  // Changed from solutions to submissions
         .insert([
           {
             battle_id: battleId,
             user_id: user.id,
             code: code,
+            language: battle?.programming_language || 'javascript',
+            status: 'pending',
             submitted_at: new Date().toISOString(),
           }
         ])
@@ -242,10 +244,10 @@ const BattleArena = () => {
         .update({ 
           defender_id: user.id, 
           status: 'in_progress', 
-          start_time: new Date().toISOString() 
+          started_at: new Date().toISOString() 
         })
         .eq('id', battleId)
-        .eq('status', 'waiting')
+        .eq('status', 'open')  // Changed from 'waiting' to 'open'
         .select()
         .single();
       
@@ -275,7 +277,7 @@ const BattleArena = () => {
         .from('battles')
         .update({ 
           status: 'completed', 
-          end_time: new Date().toISOString(), 
+          ended_at: new Date().toISOString(), 
           winner_id: winnerId 
         })
         .eq('id', battleId)
@@ -340,8 +342,8 @@ const BattleArena = () => {
       setIsBattleActive(battle.status === 'in_progress');
       setIsBattleOver(battle.status === 'completed');
       
-      if (battle.language) {
-        setLanguage(battle.language);
+      if (battle.programming_language) {
+        setLanguage(battle.programming_language);
       }
 
       if (battle.status === 'completed') {
@@ -358,7 +360,7 @@ const BattleArena = () => {
             } else if (winnerData) {
               setWinner({
                 id: winnerData.id,
-                name: winnerData.name,
+                username: winnerData.username,
                 avatar_url: winnerData.avatar_url,
                 rating: winnerData.rating,
               });
@@ -377,7 +379,7 @@ const BattleArena = () => {
                 } else if (loserData) {
                   setLoser({
                     id: loserData.id,
-                    name: loserData.name,
+                    username: loserData.username,
                     avatar_url: loserData.avatar_url,
                     rating: loserData.rating,
                   });
@@ -393,11 +395,11 @@ const BattleArena = () => {
 
   // Handle time remaining and battle end
   useEffect(() => {
-    if (battle && battle.duration && battle.start_time && isBattleActive) {
+    if (battle && battle.duration && battle.started_at && isBattleActive) {
       const calculateTimeRemaining = () => {
-        if (!battle?.start_time) return;
+        if (!battle?.started_at) return;
         
-        const startTime = new Date(battle.start_time).getTime();
+        const startTime = new Date(battle.started_at).getTime();
         const endTime = startTime + battle.duration * 60 * 1000;
         const now = new Date().getTime();
         const timeLeft = endTime - now;
@@ -516,11 +518,11 @@ const BattleArena = () => {
   const isCreator = user?.id === battle?.creator_id;
   const isDefender = user?.id === battle?.defender_id;
   const hasJoined = isCreator || isDefender;
-  const canJoin = !hasJoined && battle?.status === 'waiting';
+  const canJoin = !hasJoined && battle?.status === 'open';  // Changed from 'waiting' to 'open'
   const canSubmit = hasJoined && isBattleActive && !solution;
   const canEnd = hasJoined && isBattleActive && solution;
   const hasEnded = battle?.status === 'completed';
-  const isRated = battle?.is_rated;
+  const isRated = battle?.battle_type === 'Rated';  // Changed from is_rated to battle_type
 
   const getLanguageMode = (language: string) => {
     switch (language.toLowerCase()) {
@@ -569,7 +571,7 @@ const BattleArena = () => {
 
   const getStatusIcon = (status: string): React.ReactNode => {
     switch (status) {
-      case 'waiting':
+      case 'open':  // Changed from 'waiting' to 'open'
         return <HelpCircle className="w-4 h-4" />;
       case 'in_progress':
         return <Loader2 className="w-4 h-4 animate-spin" />;
@@ -588,7 +590,7 @@ const BattleArena = () => {
           <Badge className={getDifficultyColor(battle?.difficulty || 'easy')}>{battle?.difficulty}</Badge>
           {battle && (
             <div className="flex items-center gap-1">
-              {battle.is_rated ? (
+              {battle.battle_type === 'Rated' ? (  // Changed from is_rated to battle_type
                 <Badge className="bg-icon-accent text-black">Rated</Badge>
               ) : (
                 <Badge variant="outline">Casual</Badge>
@@ -613,7 +615,7 @@ const BattleArena = () => {
                       {problem?.title}
                     </CardTitle>
                     <CardDescription>
-                      Solve the problem using {battle?.language}
+                      Solve the problem using {battle?.programming_language}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -660,7 +662,7 @@ const BattleArena = () => {
                       <div>
                         <div className="text-sm text-icon-light-gray">
                           <span className="font-medium">Language</span>
-                          <p className="text-xs opacity-80">{battle?.language}</p>
+                          <p className="text-xs opacity-80">{battle?.programming_language}</p>
                         </div>
                       </div>
                       <div>
@@ -677,7 +679,7 @@ const BattleArena = () => {
                       </div>
                       {battle && (
                         <div>
-                          {battle.is_rated && (
+                          {battle.battle_type === 'Rated' && (  // Changed from is_rated to battle_type
                             <div className="text-sm text-icon-light-gray">
                               <span className="font-medium">Rated Battle</span>
                               <p className="text-xs opacity-80">
@@ -685,7 +687,7 @@ const BattleArena = () => {
                               </p>
                             </div>
                           )}
-                          {!battle.is_rated && (
+                          {battle.battle_type !== 'Rated' && (  // Changed from is_rated to battle_type
                             <div className="text-sm text-icon-light-gray">
                               <span className="font-medium">Casual Battle</span>
                               <p className="text-xs opacity-80">
@@ -702,7 +704,7 @@ const BattleArena = () => {
                           <span className="font-medium">Status</span>
                           <div className="flex items-center gap-2">
                             <p className="text-xs opacity-80">{battle?.status}</p>
-                            {getStatusIcon(battle?.status || 'waiting')}
+                            {getStatusIcon(battle?.status || 'open')}
                           </div>
                         </div>
                       </div>
@@ -732,8 +734,8 @@ const BattleArena = () => {
             <CardContent className="flex-grow">
               <Editor
                 height="500px"
-                defaultLanguage={getLanguageMode(battle?.language || 'javascript')}
-                language={getLanguageMode(battle?.language || 'javascript')}
+                defaultLanguage={getLanguageMode(battle?.programming_language || 'javascript')}
+                language={getLanguageMode(battle?.programming_language || 'javascript')}
                 value={code}
                 theme="vs-dark"
                 onChange={(value) => {
@@ -803,9 +805,9 @@ const BattleArena = () => {
                         <div className="flex items-center">
                           <Avatar className="mr-2 h-5 w-5">
                             <AvatarImage src={creator?.avatar_url || ""} />
-                            <AvatarFallback>{creator?.name?.charAt(0) || "C"}</AvatarFallback>
+                            <AvatarFallback>{creator?.username?.charAt(0) || "C"}</AvatarFallback>
                           </Avatar>
-                          <span>{creator?.name || "Creator"}</span>
+                          <span>{creator?.username || "Creator"}</span>
                         </div>
                       </DropdownMenuItem>
                       {battle.defender_id && (
@@ -813,9 +815,9 @@ const BattleArena = () => {
                           <div className="flex items-center">
                             <Avatar className="mr-2 h-5 w-5">
                               <AvatarImage src={defender?.avatar_url || ""} />
-                              <AvatarFallback>{defender?.name?.charAt(0) || "D"}</AvatarFallback>
+                              <AvatarFallback>{defender?.username?.charAt(0) || "D"}</AvatarFallback>
                             </Avatar>
-                            <span>{defender?.name || "Defender"}</span>
+                            <span>{defender?.username || "Defender"}</span>
                           </div>
                         </DropdownMenuItem>
                       )}
@@ -841,7 +843,7 @@ const BattleArena = () => {
           <Card className="bg-icon-dark-gray border-icon-gray">
             <CardHeader>
               <CardTitle className="text-md font-bold">
-                {winner ? `${winner.name} wins!` : 'Battle ended without a winner.'}
+                {winner ? `${winner.username} wins!` : 'Battle ended without a winner.'}
               </CardTitle>
               <CardDescription>
                 Details of the battle result.
@@ -856,9 +858,9 @@ const BattleArena = () => {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={winner.avatar_url || ""} />
-                          <AvatarFallback>{winner.name?.charAt(0) || "W"}</AvatarFallback>
+                          <AvatarFallback>{winner.username?.charAt(0) || "W"}</AvatarFallback>
                         </Avatar>
-                        <p className="text-xs opacity-80">{winner.name}</p>
+                        <p className="text-xs opacity-80">{winner.username}</p>
                       </div>
                     ) : (
                       <p className="text-xs opacity-80">No winner</p>
@@ -872,9 +874,9 @@ const BattleArena = () => {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={loser.avatar_url || ""} />
-                          <AvatarFallback>{loser.name?.charAt(0) || "L"}</AvatarFallback>
+                          <AvatarFallback>{loser.username?.charAt(0) || "L"}</AvatarFallback>
                         </Avatar>
-                        <p className="text-xs opacity-80">{loser.name}</p>
+                        <p className="text-xs opacity-80">{loser.username}</p>
                       </div>
                     ) : (
                       <p className="text-xs opacity-80">No loser</p>

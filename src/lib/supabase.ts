@@ -6,9 +6,10 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Updated type definitions to match the database schema
 export type Profile = {
   id: string;
-  username: string;  // Changed from 'name' to 'username' to match DB schema
+  username: string;  // Using username as per DB schema
   email: string | null;
   avatar_url: string | null;
   rating: number;
@@ -21,15 +22,15 @@ export type Battle = {
   creator_id: string;
   defender_id: string | null;
   problem_id: number;
-  programming_language: string;  // This field exists in the DB schema
+  programming_language: string;
   difficulty: string;
   duration: number;
-  battle_type: 'Rated' | 'Casual';  // Using battle_type instead of is_rated
+  battle_type: 'Rated' | 'Casual';  // Using battle_type as in DB schema
   status: 'open' | 'in_progress' | 'completed';
   winner_id: string | null;
   created_at: string;
-  started_at: string | null;
-  ended_at: string | null;
+  started_at: string | null;  // Using started_at instead of start_time
+  ended_at: string | null;    // Using ended_at instead of end_time
 };
 
 export type Submission = {
@@ -39,5 +40,14 @@ export type Submission = {
   code: string;
   language: string;
   status: 'pending' | 'correct' | 'incorrect';
+  submitted_at: string;
+};
+
+// Adding a Solution type that was used in BattleArena.tsx but wasn't defined
+export type Solution = {
+  id: string;
+  battle_id: string;
+  user_id: string;
+  code: string;
   submitted_at: string;
 };

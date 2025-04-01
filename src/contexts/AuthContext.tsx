@@ -91,10 +91,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (user) {
         const newProfile = {
           id: user.id,
+          username: user.user_metadata?.name || user.user_metadata?.full_name || 'Anonymous Coder', // Using username
           email: user.email,
-          name: user.user_metadata?.name || user.user_metadata?.full_name || 'Anonymous Coder',
           avatar_url: user.user_metadata?.avatar_url || null,
-          rating: 1000, // Default rating as per requirement
+          rating: 1000, // Default rating
+          created_at: new Date().toISOString()
         };
         
         const { error } = await supabase.from('profiles').insert(newProfile);
