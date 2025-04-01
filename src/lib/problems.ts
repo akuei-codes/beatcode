@@ -13,7 +13,7 @@ export interface Problem {
 
 export async function getRandomProblem(): Promise<Problem | null> {
   try {
-    // Fetch a random problem from Supabase
+    // Fetch problems from Supabase
     const { data, error } = await supabase
       .from('problems')
       .select('*')

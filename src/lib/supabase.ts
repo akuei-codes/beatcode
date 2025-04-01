@@ -8,11 +8,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type Profile = {
   id: string;
-  username: string;
+  username: string;  // Changed from 'name' to 'username' to match DB schema
   email: string | null;
   avatar_url: string | null;
   rating: number;
   created_at: string;
+  updated_at?: string;
 };
 
 export type Battle = {
@@ -20,10 +21,10 @@ export type Battle = {
   creator_id: string;
   defender_id: string | null;
   problem_id: number;
-  programming_language: string;
+  programming_language: string;  // This field exists in the DB schema
   difficulty: string;
   duration: number;
-  battle_type: 'Rated' | 'Casual';
+  battle_type: 'Rated' | 'Casual';  // Using battle_type instead of is_rated
   status: 'open' | 'in_progress' | 'completed';
   winner_id: string | null;
   created_at: string;

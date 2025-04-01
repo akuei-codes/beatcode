@@ -44,7 +44,7 @@ const CreateBattle = () => {
       
       console.log("Creating battle with problem:", randomProblem.id);
       
-      // Create battle in Supabase with updated schema
+      // Create battle in Supabase with the correct schema
       const { data: battle, error } = await supabase
         .from('battles')
         .insert([
@@ -72,6 +72,8 @@ const CreateBattle = () => {
       
       console.log("Battle created successfully:", battle);
       toast.success("Battle created successfully!");
+      
+      // Ensure we navigate to the battle arena with the battle ID
       navigate(`/battle/${battle.id}`);
     } catch (error: any) {
       console.error('Error creating battle:', error);
