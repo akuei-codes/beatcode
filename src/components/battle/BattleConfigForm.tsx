@@ -18,6 +18,7 @@ import { RatedSwitch } from './RatedSwitch';
 interface BattleConfigFormProps {
   onSubmit: (config: BattleConfig) => Promise<void>;
   onChange?: (config: BattleConfig) => void;
+  isLoading?: boolean;
 }
 
 export interface BattleConfig {
@@ -27,7 +28,7 @@ export interface BattleConfig {
   isRated: boolean;
 }
 
-export const BattleConfigForm = ({ onSubmit, onChange }: BattleConfigFormProps) => {
+export const BattleConfigForm = ({ onSubmit, onChange, isLoading = false }: BattleConfigFormProps) => {
   const [language, setLanguage] = useState('');
   const [difficulty, setDifficulty] = useState('');
   const [duration, setDuration] = useState('');
@@ -75,6 +76,10 @@ export const BattleConfigForm = ({ onSubmit, onChange }: BattleConfigFormProps) 
     setIsRated(value);
   };
 
+  // Use the parent loading state if provided
+  const buttonDisabled = isLoading || isCreating || !language || !difficulty || !duration;
+  const showLoading = isLoading || isCreating;
+
   return (
     <Card className="bg-icon-dark-gray border-icon-gray">
       <CardHeader>
@@ -96,9 +101,9 @@ export const BattleConfigForm = ({ onSubmit, onChange }: BattleConfigFormProps) 
         <Button 
           className="icon-button-primary group"
           onClick={handleSubmit}
-          disabled={isCreating || !language || !difficulty || !duration}
+          disabled={buttonDisabled}
         >
-          {isCreating ? (
+          {showLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating...

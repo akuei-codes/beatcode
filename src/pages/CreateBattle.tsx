@@ -11,6 +11,7 @@ import { BattlePreview } from '@/components/battle/BattlePreview';
 const CreateBattle = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
   const [formState, setFormState] = useState<BattleConfig>({
     language: '',
     difficulty: '',
@@ -31,6 +32,8 @@ const CreateBattle = () => {
       return;
     }
 
+    setIsLoading(true);
+
     try {
       // Get a random problem
       const randomProblem = getRandomProblem();
@@ -38,6 +41,8 @@ const CreateBattle = () => {
       if (!randomProblem || !randomProblem.id) {
         throw new Error("Failed to get a random problem");
       }
+      
+      console.log("Creating battle with problem:", randomProblem.id);
       
       // Create battle in Supabase
       const { data: battle, error } = await supabase
@@ -61,15 +66,18 @@ const CreateBattle = () => {
         throw error;
       }
       
-      if (!battle) {
+      if (!battle || !battle.id) {
         throw new Error("No battle data returned");
       }
       
+      console.log("Battle created successfully:", battle);
       toast.success("Battle created successfully!");
       navigate(`/battle/${battle.id}`);
     } catch (error: any) {
       console.error('Error creating battle:', error);
       toast.error(`Failed to create battle: ${error.message || "Please try again."}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -88,6 +96,7 @@ const CreateBattle = () => {
         <BattleConfigForm 
           onSubmit={handleCreateBattle}
           onChange={setFormState}
+          isLoading={isLoading}
         />
 
         <BattlePreview 
