@@ -25,6 +25,7 @@ const JoinBattle = () => {
   const [filteredBattles, setFilteredBattles] = useState<Battle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [joiningBattleId, setJoiningBattleId] = useState<string | null>(null);
   const [difficultyFilter, setDifficultyFilter] = useState('all');
 
   // Language mapping
@@ -44,10 +45,10 @@ const JoinBattle = () => {
   };
   
   // Difficulty points mapping
-  const difficultyPoints: Record<string, number> = {
-    'Easy': 10,
-    'Medium': 25,
-    'Hard': 50
+  const difficultyPoints: Record<string, string> = {
+    'Easy': '10',
+    'Medium': '25',
+    'Hard': '50'
   };
 
   const fetchBattles = async () => {
@@ -115,10 +116,26 @@ const JoinBattle = () => {
       return;
     }
 
-    setIsLoading(true);
+    setJoiningBattleId(battle.id);
     
     try {
-      // Update the battle with the defender's ID
+      // First, check if the battle is still open and available
+      const { data: currentBattle, error: fetchError } = await supabase
+        .from('battles')
+        .select('*')
+        .eq('id', battle.id)
+        .eq('status', 'open')
+        .is('defender_id', null)
+        .single();
+        
+      if (fetchError || !currentBattle) {
+        console.error("Error fetching battle or battle already taken:", fetchError);
+        toast.error("This battle is no longer available");
+        await fetchBattles(); // Refresh battle list
+        return;
+      }
+      
+      // Now update the battle with the defender's ID
       const { data, error } = await supabase
         .from('battles')
         .update({
@@ -127,8 +144,7 @@ const JoinBattle = () => {
           started_at: new Date().toISOString()
         })
         .eq('id', battle.id)
-        .select()
-        .single();
+        .select();
         
       if (error) {
         console.error("Error joining battle:", error);
@@ -141,7 +157,7 @@ const JoinBattle = () => {
       toast.error(`Failed to join battle: ${error.message || "Please try again."}`);
       console.error('Error joining battle:', error);
     } finally {
-      setIsLoading(false);
+      setJoiningBattleId(null);
     }
   };
 
@@ -279,9 +295,9 @@ const JoinBattle = () => {
                   <Button
                     onClick={() => handleJoinBattle(battle)}
                     className="w-full md:w-auto icon-button-primary group"
-                    disabled={isLoading}
+                    disabled={isLoading || joiningBattleId === battle.id}
                   >
-                    {isLoading ? (
+                    {joiningBattleId === battle.id ? (
                       <>
                         <RefreshCw size={16} className="animate-spin mr-2" />
                         Joining...
