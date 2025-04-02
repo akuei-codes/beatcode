@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Battle, Submission } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { CodeEditor } from '@toast-ui/react-editor';
-import '@toast-ui/editor/dist/toastui-editor.css';
+import '@/components/CodeEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
@@ -12,13 +11,13 @@ import {
   XCircle, 
   Loader2, 
   Play, 
-  Stop, 
   Eye, 
   Copy,
   LoaderCircle
 } from 'lucide-react';
 import { defineProblem } from './problems/problem-definitions';
 import { useQuery } from '@tanstack/react-query';
+import CodeEditor from '@/components/CodeEditor';
 
 const BattleArena = () => {
   const { battleId } = useParams<{ battleId: string }>();
@@ -30,7 +29,6 @@ const BattleArena = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
-  const editorRef = useRef<CodeEditor>(null);
   const [problemDefinition, setProblemDefinition] = useState<ReturnType<typeof defineProblem> | null>(null);
   const [isCodeCopied, setIsCodeCopied] = useState(false);
 
@@ -149,12 +147,10 @@ const BattleArena = () => {
     setEvaluationResult(null);
 
     try {
-      // Simulate evaluation based on problem definition
       const testCases = problemDefinition.testCases;
       let allPassed = true;
 
       for (const testCase of testCases) {
-        // Basic JavaScript evaluation (for demonstration purposes)
         try {
           const userFunction = new Function(`return ${code}`)();
           const result = userFunction(...testCase.input);
@@ -172,7 +168,6 @@ const BattleArena = () => {
       const newStatus = allPassed ? 'correct' : 'incorrect';
       setEvaluationResult(allPassed ? 'All test cases passed!' : 'Some test cases failed.');
 
-      // Update submission status in Supabase
       const { error: updateError } = await supabase
         .from('submissions')
         .update({ status: newStatus })
@@ -201,7 +196,6 @@ const BattleArena = () => {
     if (!battle || !user) return;
   
     try {
-      // Update the battle status to 'completed' and set the winner
       const { error: updateError } = await supabase
         .from('battles')
         .update({ 
@@ -252,7 +246,6 @@ const BattleArena = () => {
       <h1 className="text-2xl font-bold mb-4">{problemDefinition.title}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Problem Description */}
         <Card className="bg-card/80">
           <CardContent>
             <h2 className="text-lg font-semibold mb-2">Problem Description</h2>
@@ -269,16 +262,15 @@ const BattleArena = () => {
           </CardContent>
         </Card>
 
-        {/* Code Editor */}
         <Card className="bg-card/80">
           <CardContent>
             <h2 className="text-lg font-semibold mb-2">Code Editor</h2>
             
             <CodeEditor 
               language={battle.programming_language.toLowerCase()} 
-              value={code}
-              onChange={(value) => setCode(value)}
-              placeholder="Write your solution here..."
+              initialCode={code}
+              onCodeChange={(newCode) => setCode(newCode)}
+              onRunCode={handleSubmitCode}
             />
 
             <div className="flex justify-between mt-4">
@@ -320,7 +312,6 @@ const BattleArena = () => {
         </Card>
       </div>
 
-      {/* Submission Status and Results */}
       {submission && (
         <Card className="mt-4 bg-card/80">
           <CardContent>
