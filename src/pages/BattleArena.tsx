@@ -24,6 +24,8 @@ import CodeEditor from '@/components/CodeEditor';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 
 interface ChatMessage {
   id: string;
@@ -54,12 +56,7 @@ const BattleArena = () => {
   const chatBubbleRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
 
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [chatMessages]);
-
+  // Fetch battle data
   const { data: battle, isLoading, error } = useQuery({
     queryKey: ['battle', battleId],
     queryFn: async () => {
@@ -71,21 +68,79 @@ const BattleArena = () => {
     refetchInterval: 5000,
   });
 
+  // Fetch problem data
   const { data: problem, isLoading: isProblemLoading } = useQuery({
     queryKey: ['problem', battle?.problem_id],
     queryFn: async () => {
       if (!battle?.problem_id) throw new Error("Problem ID is required");
-      return getProblemById(battle.problem_id.toString());
+      // Convert to number to fix the type error
+      return getProblemById(Number(battle.problem_id));
     },
     enabled: !!battle?.problem_id,
   });
 
+  // Fetch chat messages
+  const { data: initialMessages } = useQuery({
+    queryKey: ['chat_messages', battleId],
+    queryFn: async () => {
+      if (!battleId) return [];
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('battle_id', battleId)
+        .order('timestamp', { ascending: true });
+      
+      if (error) throw error;
+      return data as ChatMessage[];
+    },
+    enabled: !!battleId,
+  });
+
+  // Update messages when initialMessages changes
+  useEffect(() => {
+    if (initialMessages) {
+      setChatMessages(initialMessages);
+    }
+  }, [initialMessages]);
+
+  // Set up real-time subscription for chat messages
+  useEffect(() => {
+    if (!battleId) return;
+
+    // Set up Supabase real-time subscription
+    const chatChannel = supabase
+      .channel(`battle-chat-${battleId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `battle_id=eq.${battleId}` },
+        (payload) => {
+          const newMessage = payload.new as ChatMessage;
+          setChatMessages((prev) => [...prev, newMessage]);
+        }
+      )
+      .subscribe();
+
+    // Clean up subscription on unmount
+    return () => {
+      supabase.removeChannel(chatChannel);
+    };
+  }, [battleId]);
+
+  // Scroll to bottom when chat messages change
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // Set timer when battle data is loaded
   useEffect(() => {
     if (battle?.duration) {
       setTimeLeft(battle.duration * 60);
     }
   }, [battle]);
 
+  // Timer logic
   useEffect(() => {
     if (battle && timeLeft !== null && isTimerRunning) {
       timerRef.current = setInterval(() => {
@@ -106,6 +161,7 @@ const BattleArena = () => {
     };
   }, [isTimerRunning, timeLeft]);
 
+  // Submit code to Supabase
   const handleSubmitCode = async () => {
     if (!battleId || !user) return;
     setIsSubmitting(true);
@@ -133,6 +189,39 @@ const BattleArena = () => {
     }
   };
 
+  // Send a chat message
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || !battleId || !user) return;
+    
+    try {
+      const { error } = await supabase.from('chat_messages').insert([
+        {
+          battle_id: battleId,
+          sender: profile?.username || user.id,
+          message: chatInput,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+
+      if (error) {
+        toast.error('Failed to send message.');
+      } else {
+        // Clear input on successful send
+        setChatInput('');
+      }
+    } catch (err) {
+      toast.error('Failed to send message.');
+    }
+  };
+
+  // Handle Enter key in chat input
+  const handleChatKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      sendChatMessage();
+    }
+  };
+
+  // Format timer display
   const formatTime = (seconds: number | null): string => {
     if (seconds === null) return '∞';
     const m = Math.floor(seconds / 60);
@@ -140,6 +229,7 @@ const BattleArena = () => {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // Chat window drag functionality
   const startDrag = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = chatBubbleRef.current?.getBoundingClientRect();
     if (rect) {
@@ -163,6 +253,23 @@ const BattleArena = () => {
     document.removeEventListener('mousemove', onDrag);
     document.removeEventListener('mouseup', endDrag);
   };
+
+  if (isLoading || isProblemLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8 mr-2" />
+        <p>Loading battle...</p>
+      </div>
+    );
+  }
+
+  if (error || !battle) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <p className="text-red-500">Error loading battle data</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col relative">
@@ -245,39 +352,61 @@ const BattleArena = () => {
       >
         <button
           onClick={() => setChatOpen(!chatOpen)}
-          className="bg-icon-accent text-icon-black w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+          className="bg-icon-accent text-icon-black w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform relative"
         >
           <MessageCircle />
+          {chatMessages.length > 0 && !chatOpen && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              {chatMessages.length}
+            </span>
+          )}
         </button>
 
         {chatOpen && (
-          <div className="mt-2 w-80 h-96 bg-icon-dark-gray border border-icon-gray rounded-lg p-4 flex flex-col">
-            <div className="flex-grow overflow-y-auto mb-2 text-sm" ref={chatContainerRef}>
-              {chatMessages.map((msg, i) => (
-                <div key={i} className="mb-1">
-                  <strong>{msg.sender}:</strong> {msg.message}
-                </div>
-              ))}
+          <div className="mt-2 w-80 h-96 bg-icon-dark-gray border border-icon-gray rounded-lg p-4 flex flex-col shadow-lg">
+            <div className="flex justify-between items-center mb-2 pb-2 border-b border-icon-gray">
+              <h3 className="font-medium">Battle Chat</h3>
+              <Badge variant="outline">{chatMessages.length} messages</Badge>
             </div>
-            <div className="flex gap-2">
-              <input
+            
+            <ScrollArea className="flex-grow mb-2" ref={chatContainerRef}>
+              <div className="space-y-2 pr-2">
+                {chatMessages.length === 0 ? (
+                  <p className="text-center text-gray-500 italic text-sm py-4">
+                    No messages yet. Start the conversation!
+                  </p>
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div 
+                      key={msg.id} 
+                      className={`rounded-lg p-2 text-sm ${
+                        msg.sender === (profile?.username || user?.id) 
+                          ? 'bg-blue-600 ml-8 text-white' 
+                          : 'bg-icon-gray mr-8'
+                      }`}
+                    >
+                      <div className="font-semibold text-xs opacity-70">
+                        {msg.sender === (profile?.username || user?.id) ? 'You' : msg.sender}
+                      </div>
+                      {msg.message}
+                      <div className="text-right text-xs opacity-50 mt-1">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+            
+            <div className="flex gap-2 mt-2">
+              <Input
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                className="flex-grow px-2 py-1 rounded bg-icon-gray text-white text-sm"
+                onKeyPress={handleChatKeyPress}
+                className="flex-grow bg-icon-gray text-white text-sm"
                 placeholder="Type message..."
               />
-              <Button size="icon" variant="ghost" onClick={async () => {
-                if (!chatInput.trim()) return;
-                const { error } = await supabase.from('chat_messages').insert([
-                  {
-                    battle_id: battleId,
-                    sender: profile?.username || user?.id,
-                    message: chatInput,
-                    timestamp: new Date().toISOString()
-                  }
-                ]);
-                if (!error) setChatInput('');
-              }}>
+              <Button size="icon" onClick={sendChatMessage} disabled={!chatInput.trim()}>
                 <Send size={16} />
               </Button>
             </div>
