@@ -1,5 +1,6 @@
 
 // This file defines the coding problems used in battles, including test cases for validation
+// Note: For database-backed problems, we now use the problems.ts interface in lib/
 
 // Define a consistent type for all problem definitions
 export interface ProblemDefinition {
