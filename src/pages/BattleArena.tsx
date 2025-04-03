@@ -32,6 +32,7 @@ interface ChatMessage {
   sender: string;
   message: string;
   timestamp: string;
+  battle_id?: string;
 }
 
 const BattleArena = () => {
