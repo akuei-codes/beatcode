@@ -26,12 +26,20 @@ import { Badge } from '@/components/ui/badge';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 interface ChatMessage {
   id: string;
   sender: string;
   message: string;
   timestamp: string;
+}
+
+// Update Submission type to match the evaluation fields
+interface ExtendedSubmission extends Submission {
+  score?: number;
+  feedback?: string;
+  evaluated_at?: string;
 }
 
 const BattleArena = () => {
@@ -43,7 +51,7 @@ const BattleArena = () => {
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionResult, setSubmissionResult] = useState<Submission | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<ExtendedSubmission | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
@@ -51,6 +59,7 @@ const BattleArena = () => {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [chatPosition, setChatPosition] = useState({ x: 100, y: 100 });
+  const [showScoreDialog, setShowScoreDialog] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatBubbleRef = useRef<HTMLDivElement>(null);
@@ -141,12 +150,14 @@ const BattleArena = () => {
     };
   }, [isTimerRunning, timeLeft]);
 
-  // Submit code to Supabase
+  // Submit code to Supabase and get OpenAI evaluation
   const handleSubmitCode = async () => {
-    if (!battleId || !user) return;
+    if (!battleId || !user || !problem) return;
     setIsSubmitting(true);
+
     try {
-      const { data, error } = await supabase.from('submissions').insert([
+      // First, insert the submission
+      const { data: submission, error } = await supabase.from('submissions').insert([
         {
           battle_id: battleId,
           user_id: user.id,
@@ -157,13 +168,64 @@ const BattleArena = () => {
         },
       ]).select().single();
 
-      if (error) toast.error('Failed to submit code.');
-      else {
-        setSubmissionResult(data as Submission);
-        toast.success('Code submitted successfully!');
+      if (error || !submission) {
+        toast.error('Failed to submit code.');
+        return;
       }
+
+      // Get GPT evaluation of the code
+      const gptRes = await fetch("https://icon-eval.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2024-02-15-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": "CuNYWL7EcoLvghiOdUI2oOoE0JZhCszOAMxZVvp3r5w7PWk4M9H9JQQJ99BDACYeBjFXJ3w3AAABACOG0zDG"
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              "role": "user",
+              "content": "You are a strict code evaluator. Evaluate the given code out of 100. Consider correctness, code quality, time complexity, memory efficiency, and overall implementation. Give a score between 0 and 100 and then give a paragraph of feedback (2-3 sentences) explaining the strengths and weaknesses."
+            },
+            { 
+              role: "user", 
+              content: `Evaluate the following submission for the problem: \n\n${problem.question}\n\nCode:\n${code}` 
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 200,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          stop: null
+        })
+      });
+
+      const gptData = await gptRes.json();
+      const responseText = gptData.choices[0].message.content;
+      const scoreMatch = responseText.match(/(\d+(\.\d+)?)/);
+      const score = scoreMatch ? parseInt(scoreMatch[0]) : 0;
+
+      // Update the submission with the evaluation results
+      await supabase.from('submissions').update({
+        status: 'evaluated',
+        score,
+        feedback: responseText,
+        evaluated_at: new Date().toISOString(),
+      }).eq('id', submission.id);
+
+      const updatedSubmission: ExtendedSubmission = { 
+        ...submission, 
+        score, 
+        feedback: responseText, 
+        status: 'evaluated' 
+      };
+
+      setSubmissionResult(updatedSubmission);
+      setShowScoreDialog(true); // Show the score dialog when evaluation is complete
+      toast.success('Code evaluated and scored!');
     } catch (err) {
-      toast.error('Submission failed.');
+      console.error('Submission error:', err);
+      toast.error('Submission failed or evaluation error.');
     } finally {
       setIsSubmitting(false);
     }
@@ -307,14 +369,27 @@ const BattleArena = () => {
                 </>
               )}
             </Button>
-            {submissionResult && (
-              <div className="mt-4">
-                Submission Status: {submissionResult.status === 'correct' ? (
-                  <CheckCircle className="text-green-500 inline-block mr-2" />
-                ) : (
-                  <XCircle className="text-red-500 inline-block mr-2" />
+            {submissionResult && !showScoreDialog && (
+              <div className="mt-4 p-3 border border-icon-gray rounded-md bg-icon-gray">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">Submission Status:</span>
+                  <Badge variant="outline" className="ml-2">
+                    {submissionResult.status === 'evaluated' ? 'Evaluated' : submissionResult.status}
+                  </Badge>
+                </div>
+                {submissionResult.score !== undefined && (
+                  <div className="flex items-center mt-2">
+                    <span>Score: </span>
+                    <span className="font-bold ml-2 text-icon-accent">{submissionResult.score}%</span>
+                  </div>
                 )}
-                {submissionResult.status}
+                <Button 
+                  variant="outline" 
+                  className="mt-2 w-full text-xs" 
+                  onClick={() => setShowScoreDialog(true)}
+                >
+                  View Detailed Feedback
+                </Button>
               </div>
             )}
           </div>
@@ -358,7 +433,7 @@ const BattleArena = () => {
                       key={msg.id} 
                       className={`rounded-lg p-2 text-sm ${
                         msg.sender === (profile?.username || user?.id) 
-                          ? 'bg-blue-600 ml-8 text-white' 
+                          ? 'bg-teal-600 ml-8 text-white' 
                           : 'bg-icon-gray mr-8'
                       }`}
                     >
@@ -390,6 +465,26 @@ const BattleArena = () => {
           </div>
         )}
       </div>
+
+      {/* Score Dialog */}
+      <Dialog open={showScoreDialog} onOpenChange={setShowScoreDialog}>
+        <DialogContent className="bg-icon-dark-gray border border-icon-gray">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-center text-icon-accent">
+              You scored {submissionResult?.score || 0}%
+            </DialogTitle>
+            <DialogDescription className="text-center mt-2 text-white">
+              {submissionResult?.feedback || 'Your code has been evaluated.'}
+            </DialogDescription>
+            <p className="text-sm text-icon-light-gray text-center mt-4">
+              The winner will be announced once all players have submitted their solutions.
+            </p>
+          </DialogHeader>
+          <Button className="w-full mt-4" onClick={() => setShowScoreDialog(false)}>
+            Close
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

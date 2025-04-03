@@ -39,8 +39,11 @@ export type Submission = {
   user_id: string;
   code: string;
   language: string;
-  status: 'pending' | 'correct' | 'incorrect';
+  status: 'pending' | 'correct' | 'incorrect' | 'evaluated';
   submitted_at: string;
+  score?: number;
+  feedback?: string;
+  evaluated_at?: string;
 };
 
 // Adding a Solution type that was used in BattleArena.tsx but wasn't defined
