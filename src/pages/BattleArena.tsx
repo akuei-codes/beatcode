@@ -169,6 +169,7 @@ const BattleArena = () => {
       ]).select().single();
 
       if (error || !submission) {
+        console.error('Submission error:', error);
         toast.error('Failed to submit code.');
         return;
       }
