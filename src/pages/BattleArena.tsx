@@ -32,7 +32,6 @@ interface ChatMessage {
   sender: string;
   message: string;
   timestamp: string;
-  battle_id?: string;
 }
 
 const BattleArena = () => {
@@ -56,6 +55,7 @@ const BattleArena = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatBubbleRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const channelRef = useRef<ReturnType<typeof supabase.channel>>();
 
   // Fetch battle data
   const { data: battle, isLoading, error } = useQuery({
@@ -74,58 +74,37 @@ const BattleArena = () => {
     queryKey: ['problem', battle?.problem_id],
     queryFn: async () => {
       if (!battle?.problem_id) throw new Error("Problem ID is required");
-      // Convert to number to fix the type error
       return getProblemById(Number(battle.problem_id));
     },
     enabled: !!battle?.problem_id,
   });
 
-  // Fetch chat messages
-  const { data: initialMessages } = useQuery({
-    queryKey: ['chat_messages', battleId],
-    queryFn: async () => {
-      if (!battleId) return [];
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('battle_id', battleId)
-        .order('timestamp', { ascending: true });
-      
-      if (error) throw error;
-      return data as ChatMessage[];
-    },
-    enabled: !!battleId,
-  });
-
-  // Update messages when initialMessages changes
+  // Set up real-time messaging channel without database persistence
   useEffect(() => {
-    if (initialMessages) {
-      setChatMessages(initialMessages);
-    }
-  }, [initialMessages]);
+    if (!battleId || !user) return;
 
-  // Set up real-time subscription for chat messages
-  useEffect(() => {
-    if (!battleId) return;
+    const channel = supabase.channel(`battle-chat-${battleId}`, {
+      config: { 
+        broadcast: { self: true } 
+      }
+    });
 
-    // Set up Supabase real-time subscription
-    const chatChannel = supabase
-      .channel(`battle-chat-${battleId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `battle_id=eq.${battleId}` },
-        (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          setChatMessages((prev) => [...prev, newMessage]);
-        }
-      )
+    // Handle incoming messages
+    channel
+      .on('broadcast', { event: 'chat-message' }, (payload) => {
+        const message = payload.payload as ChatMessage;
+        setChatMessages((prev) => [...prev, message]);
+      })
       .subscribe();
 
-    // Clean up subscription on unmount
+    // Save channel ref for cleanup and sending
+    channelRef.current = channel;
+
+    // Cleanup on unmount
     return () => {
-      supabase.removeChannel(chatChannel);
+      supabase.removeChannel(channel);
     };
-  }, [battleId]);
+  }, [battleId, user]);
 
   // Scroll to bottom when chat messages change
   useEffect(() => {
@@ -190,29 +169,26 @@ const BattleArena = () => {
     }
   };
 
-  // Send a chat message
-  const sendChatMessage = async () => {
-    if (!chatInput.trim() || !battleId || !user) return;
+  // Send a chat message via the channel without saving to DB
+  const sendChatMessage = () => {
+    if (!chatInput.trim() || !user || !channelRef.current) return;
     
-    try {
-      const { error } = await supabase.from('chat_messages').insert([
-        {
-          battle_id: battleId,
-          sender: profile?.username || user.id,
-          message: chatInput,
-          timestamp: new Date().toISOString()
-        }
-      ]);
+    const newMessage = {
+      id: crypto.randomUUID(),
+      sender: profile?.username || user.id,
+      message: chatInput.trim(),
+      timestamp: new Date().toISOString()
+    };
 
-      if (error) {
-        toast.error('Failed to send message.');
-      } else {
-        // Clear input on successful send
-        setChatInput('');
-      }
-    } catch (err) {
-      toast.error('Failed to send message.');
-    }
+    // Send through Supabase channel
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'chat-message',
+      payload: newMessage
+    });
+
+    // Clear input on successful send
+    setChatInput('');
   };
 
   // Handle Enter key in chat input
