@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -28,7 +27,6 @@ const JoinBattle = () => {
   const [joiningBattleId, setJoiningBattleId] = useState<string | null>(null);
   const [difficultyFilter, setDifficultyFilter] = useState('all');
 
-  // Language mapping
   const languageLabels: Record<string, string> = {
     'javascript': 'JavaScript',
     'python': 'Python',
@@ -37,14 +35,12 @@ const JoinBattle = () => {
     'csharp': 'C#'
   };
   
-  // Difficulty color mapping
   const difficultyColors: Record<string, string> = {
     'Easy': 'bg-emerald-500/20 text-emerald-400',
     'Medium': 'bg-amber-500/20 text-amber-400',
     'Hard': 'bg-red-500/20 text-red-400'
   };
   
-  // Difficulty points mapping
   const difficultyPoints: Record<string, string> = {
     'Easy': '10',
     'Medium': '25',
@@ -54,7 +50,6 @@ const JoinBattle = () => {
   const fetchBattles = async () => {
     setIsLoading(true);
     try {
-      // Fetch battles that are in 'open' status (not yet started)
       const { data, error } = await supabase
         .from('battles')
         .select('*')
@@ -85,15 +80,12 @@ const JoinBattle = () => {
   }, []);
 
   useEffect(() => {
-    // Apply filters
     let result = battles;
     
-    // Apply difficulty filter
     if (difficultyFilter !== 'all') {
       result = result.filter(battle => battle.difficulty === difficultyFilter);
     }
     
-    // Apply search filter
     if (searchTerm) {
       result = result.filter(battle =>
         battle.programming_language.includes(searchTerm.toLowerCase()) ||
@@ -119,7 +111,6 @@ const JoinBattle = () => {
     setJoiningBattleId(battle.id);
     
     try {
-      // First, check if the battle is still open and available
       const { data: currentBattle, error: fetchError } = await supabase
         .from('battles')
         .select('*')
@@ -135,7 +126,6 @@ const JoinBattle = () => {
         return;
       }
       
-      // Now update the battle with the defender's ID
       const { data, error } = await supabase
         .from('battles')
         .update({
@@ -150,6 +140,8 @@ const JoinBattle = () => {
         console.error("Error joining battle:", error);
         throw error;
       }
+      
+      console.log("Battle joined successfully:", data);
       
       toast.success("You've joined the battle!");
       navigate(`/battle/${battle.id}`);
@@ -194,7 +186,6 @@ const JoinBattle = () => {
           </p>
         </div>
         
-        {/* Filters */}
         <div className="mb-8 flex flex-col md:flex-row gap-3 justify-between">
           <div className="flex-grow max-w-md">
             <Input
@@ -245,7 +236,6 @@ const JoinBattle = () => {
           </div>
         </div>
         
-        {/* Battle list */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <RefreshCw size={32} className="animate-spin text-icon-accent mb-4" />
