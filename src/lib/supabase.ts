@@ -41,9 +41,9 @@ export type Submission = {
   language: string;
   status: 'pending' | 'correct' | 'incorrect' | 'evaluated';
   submitted_at: string;
-  score?: number | null;
-  feedback?: string | null;
-  evaluated_at?: string | null;
+  score: number;  // Required field based on the error
+  feedback: string | null;
+  evaluated_at: string | null;
 };
 
 // Adding a Solution type that was used in BattleArena.tsx but wasn't defined
