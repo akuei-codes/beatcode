@@ -41,8 +41,8 @@ export type Submission = {
   language: string;
   status: 'pending' | 'correct' | 'incorrect' | 'evaluated';
   submitted_at: string;
-  score: number | null;  // Updated to match the database schema (can be null)
-  feedback: string | null;  // Updated to match the database schema (can be null)
+  score: number | null;  // Can be null as per database schema
+  feedback: string | null;  // Can be null as per database schema
   evaluated_at: string | null;
 };
 

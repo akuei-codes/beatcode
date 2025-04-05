@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -111,6 +112,7 @@ const JoinBattle = () => {
     setJoiningBattleId(battle.id);
     
     try {
+      // Verify battle is still available
       const { data: currentBattle, error: fetchError } = await supabase
         .from('battles')
         .select('*')
@@ -126,26 +128,35 @@ const JoinBattle = () => {
         return;
       }
       
-      console.log('Current user ID:', user.id);
-      console.log('Updating battle with defender ID:', user.id);
+      // Debug user ID - it should be a UUID string
+      console.log('Current user ID (raw):', user.id);
+      console.log('User ID type:', typeof user.id);
       
+      // Explicitly create update payload to ensure correct typing
+      const updatePayload = {
+        defender_id: user.id,
+        status: 'in_progress' as const,
+        started_at: new Date().toISOString()
+      };
+      
+      console.log('Update payload:', updatePayload);
+      
+      // Update battle with the defender's ID
       const { data, error } = await supabase
         .from('battles')
-        .update({
-          defender_id: user.id,
-          status: 'in_progress',
-          started_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', battle.id)
         .select();
         
       if (error) {
         console.error("Error joining battle:", error);
+        toast.error(`Failed to join: ${error.message}`);
         throw error;
       }
       
       console.log("Battle joined successfully, updated data:", data);
       
+      // Verify the update was successful by fetching the battle again
       const { data: verifyBattle, error: verifyError } = await supabase
         .from('battles')
         .select('*')
@@ -156,8 +167,13 @@ const JoinBattle = () => {
         console.error("Error verifying battle update:", verifyError);
       } else {
         console.log("Verified battle data:", verifyBattle);
-        if (verifyBattle.defender_id !== user.id) {
-          console.warn("Warning: Defender ID was not updated properly!");
+        
+        if (!verifyBattle.defender_id) {
+          console.warn("Warning: Defender ID is null after update!");
+        } else if (verifyBattle.defender_id !== user.id) {
+          console.warn(`Warning: Defender ID mismatch! Expected: ${user.id}, Got: ${verifyBattle.defender_id}`);
+        } else {
+          console.log("Defender ID updated successfully!");
         }
       }
       
