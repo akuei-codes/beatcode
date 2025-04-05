@@ -126,6 +126,9 @@ const JoinBattle = () => {
         return;
       }
       
+      console.log('Current user ID:', user.id);
+      console.log('Updating battle with defender ID:', user.id);
+      
       const { data, error } = await supabase
         .from('battles')
         .update({
@@ -141,7 +144,22 @@ const JoinBattle = () => {
         throw error;
       }
       
-      console.log("Battle joined successfully:", data);
+      console.log("Battle joined successfully, updated data:", data);
+      
+      const { data: verifyBattle, error: verifyError } = await supabase
+        .from('battles')
+        .select('*')
+        .eq('id', battle.id)
+        .single();
+        
+      if (verifyError) {
+        console.error("Error verifying battle update:", verifyError);
+      } else {
+        console.log("Verified battle data:", verifyBattle);
+        if (verifyBattle.defender_id !== user.id) {
+          console.warn("Warning: Defender ID was not updated properly!");
+        }
+      }
       
       toast.success("You've joined the battle!");
       navigate(`/battle/${battle.id}`);
