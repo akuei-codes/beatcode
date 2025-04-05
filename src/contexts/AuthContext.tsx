@@ -136,6 +136,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGithub = async () => {
+    // First, check if the join_battle function exists in the database
+    try {
+      const { data, error } = await supabase.rpc('check_function_exists', {
+        function_name: 'join_battle'
+      });
+      
+      // If the function doesn't exist, create it
+      if (!data || error) {
+        console.log('Creating join_battle function...');
+        
+        const createFunctionSQL = `
+          CREATE OR REPLACE FUNCTION join_battle(battle_id UUID, defender_user_id UUID)
+          RETURNS void AS $$
+          BEGIN
+            UPDATE battles 
+            SET 
+              defender_id = defender_user_id, 
+              status = 'in_progress', 
+              started_at = NOW()
+            WHERE id = battle_id;
+          END;
+          $$ LANGUAGE plpgsql SECURITY DEFINER;
+        `;
+        
+        const { error: createError } = await supabase.rpc('exec_sql', {
+          sql: createFunctionSQL
+        });
+        
+        if (createError) {
+          console.error('Error creating join_battle function:', createError);
+        } else {
+          console.log('join_battle function created successfully');
+        }
+      }
+    } catch (err) {
+      console.error('Error checking/creating function:', err);
+    }
+    
+    // Continue with GitHub sign in
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {

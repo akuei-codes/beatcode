@@ -6,10 +6,10 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Updated type definitions to match the database schema
+// Updated type definitions to match the database schema exactly
 export type Profile = {
   id: string;
-  username: string;  // Using username as per DB schema
+  username: string;
   email: string | null;
   avatar_url: string | null;
   rating: number;
@@ -23,7 +23,7 @@ export type Battle = {
   defender_id: string | null;
   problem_id: number;
   programming_language: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';  // Updated to match the database schema
+  difficulty: 'Easy' | 'Medium' | 'Hard';
   duration: number;
   battle_type: 'Rated' | 'Casual';
   status: 'open' | 'in_progress' | 'completed';
@@ -41,8 +41,8 @@ export type Submission = {
   language: string;
   status: 'pending' | 'correct' | 'incorrect' | 'evaluated';
   submitted_at: string;
-  score: number | null;  // Can be null as per database schema
-  feedback: string | null;  // Can be null as per database schema
+  score: number | null;
+  feedback: string | null;
   evaluated_at: string | null;
 };
 

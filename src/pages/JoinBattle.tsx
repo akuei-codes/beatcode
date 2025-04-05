@@ -128,33 +128,42 @@ const JoinBattle = () => {
         return;
       }
       
-      // Debug user ID - it should be a UUID string
-      console.log('Current user ID (raw):', user.id);
-      console.log('User ID type:', typeof user.id);
+      // Try a raw SQL update as a workaround for potential type issues
+      const { error: rpcError } = await supabase.rpc('join_battle', {
+        battle_id: battle.id,
+        defender_user_id: user.id
+      });
       
-      // Explicitly create update payload to ensure correct typing
-      const updatePayload = {
-        defender_id: user.id,
-        status: 'in_progress' as const,
-        started_at: new Date().toISOString()
-      };
-      
-      console.log('Update payload:', updatePayload);
-      
-      // Update battle with the defender's ID
-      const { data, error } = await supabase
-        .from('battles')
-        .update(updatePayload)
-        .eq('id', battle.id)
-        .select();
+      if (rpcError) {
+        console.error("RPC Error:", rpcError);
         
-      if (error) {
-        console.error("Error joining battle:", error);
-        toast.error(`Failed to join: ${error.message}`);
-        throw error;
+        // Fall back to regular update if RPC fails
+        console.log('Falling back to direct update. User ID:', user.id);
+        
+        const updatePayload = {
+          defender_id: user.id,
+          status: 'in_progress' as const,
+          started_at: new Date().toISOString()
+        };
+        
+        console.log('Update payload:', updatePayload);
+        
+        const { data, error } = await supabase
+          .from('battles')
+          .update(updatePayload)
+          .eq('id', battle.id)
+          .select();
+          
+        if (error) {
+          console.error("Error joining battle:", error);
+          toast.error(`Failed to join: ${error.message}`);
+          throw error;
+        }
+        
+        console.log("Battle joined successfully, updated data:", data);
+      } else {
+        console.log("Battle joined successfully via RPC");
       }
-      
-      console.log("Battle joined successfully, updated data:", data);
       
       // Verify the update was successful by fetching the battle again
       const { data: verifyBattle, error: verifyError } = await supabase
@@ -170,6 +179,8 @@ const JoinBattle = () => {
         
         if (!verifyBattle.defender_id) {
           console.warn("Warning: Defender ID is null after update!");
+          toast.error("Failed to update battle properly. Please try again.");
+          return;
         } else if (verifyBattle.defender_id !== user.id) {
           console.warn(`Warning: Defender ID mismatch! Expected: ${user.id}, Got: ${verifyBattle.defender_id}`);
         } else {
