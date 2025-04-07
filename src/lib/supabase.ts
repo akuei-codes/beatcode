@@ -33,7 +33,6 @@ export type Battle = {
   ended_at: string | null;
 };
 
-// Update Submission type to make feedback and score nullable
 export type Submission = {
   id: string;
   battle_id: string;
@@ -42,8 +41,8 @@ export type Submission = {
   language: string;
   status: 'pending' | 'correct' | 'incorrect' | 'evaluated';
   submitted_at: string;
-  score: number | null;  // Make nullable to match DB schema
-  feedback: string | null; // Make nullable to match DB schema
+  score: number | null;
+  feedback: string | null;
   evaluated_at: string | null;
 };
 
