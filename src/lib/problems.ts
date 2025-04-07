@@ -1,5 +1,5 @@
 
-import { supabase } from './supabase';
+import { supabase, optimizedFetch } from './supabase';
 
 export interface Problem {
   id: number;
@@ -11,14 +11,17 @@ export interface Problem {
   created_at?: string;
 }
 
+// Use a simple in-memory cache to avoid repeated database calls
+const problemCache = new Map<number, Problem>();
+
 export async function getRandomProblem(): Promise<Problem | null> {
   try {
-    // Fetch problems from Supabase
+    // Fetch problems from Supabase with limit to avoid loading too many records
     const { data, error } = await supabase
       .from('problems')
       .select('*')
       .order('id', { ascending: false })
-      .limit(100); // Limiting to avoid loading too many records
+      .limit(20); // Reduced limit for faster loading
     
     if (error) {
       console.error('Error fetching problems:', error);
@@ -32,8 +35,12 @@ export async function getRandomProblem(): Promise<Problem | null> {
     
     // Select a random problem from the results
     const randomIndex = Math.floor(Math.random() * data.length);
-    return data[randomIndex];
+    const problem = data[randomIndex];
     
+    // Add to cache
+    problemCache.set(problem.id, problem);
+    
+    return problem;
   } catch (error) {
     console.error('Failed to get random problem:', error);
     return null;
@@ -42,6 +49,11 @@ export async function getRandomProblem(): Promise<Problem | null> {
 
 export async function getProblemById(id: number): Promise<Problem | null> {
   try {
+    // Check cache first
+    if (problemCache.has(id)) {
+      return problemCache.get(id) || null;
+    }
+    
     const { data, error } = await supabase
       .from('problems')
       .select('*')
@@ -51,6 +63,11 @@ export async function getProblemById(id: number): Promise<Problem | null> {
     if (error) {
       console.error('Error fetching problem by id:', error);
       throw error;
+    }
+    
+    // Cache the result
+    if (data) {
+      problemCache.set(id, data);
     }
     
     return data;
@@ -66,11 +83,16 @@ export async function getProblems(): Promise<Problem[]> {
       .from('problems')
       .select('*')
       .order('id', { ascending: false })
-      .limit(100);
+      .limit(50); // Reduced limit for faster loading
     
     if (error) {
       console.error('Error fetching problems:', error);
       throw error;
+    }
+    
+    // Update cache
+    if (data) {
+      data.forEach(problem => problemCache.set(problem.id, problem));
     }
     
     return data || [];
