@@ -157,7 +157,30 @@ const BattleArena = () => {
         language
       });
       
+      // First, check if user is a participant in this battle
+      const { data: battleCheck, error: battleCheckError } = await supabase
+        .from('battles')
+        .select('creator_id, defender_id')
+        .eq('id', battleId)
+        .single();
+      
+      if (battleCheckError) {
+        console.error('Battle check error:', battleCheckError);
+        toast.error('Failed to verify battle participation');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Verify user is a participant
+      if (battleCheck.creator_id !== user.id && battleCheck.defender_id !== user.id) {
+        console.error('User is not a participant in this battle');
+        toast.error('You are not authorized to submit to this battle');
+        setIsSubmitting(false);
+        return;
+      }
+      
       // First, insert the submission with required fields only
+      console.log("Inserting submission record...");
       const { data: submission, error: submissionError } = await supabase
         .from('submissions')
         .insert({
@@ -167,8 +190,6 @@ const BattleArena = () => {
           language,
           status: 'pending',
           submitted_at: new Date().toISOString(),
-          score: null,
-          feedback: null
         })
         .select()
         .single();
@@ -210,6 +231,12 @@ const BattleArena = () => {
           })
         });
   
+        if (!gptRes.ok) {
+          const errorText = await gptRes.text();
+          console.error("GPT API error:", gptRes.status, errorText);
+          throw new Error(`API error: ${gptRes.status} - ${errorText}`);
+        }
+        
         const gptData = await gptRes.json();
         console.log("GPT evaluation response received:", gptData);
         
@@ -250,6 +277,7 @@ const BattleArena = () => {
             
           if (fetchError || !updatedSubmission) {
             console.error('Error fetching updated submission:', fetchError);
+            toast.error('Error retrieving updated submission: ' + fetchError?.message);
           } else {
             setSubmissionResult(updatedSubmission as Submission);
             setShowScoreDialog(true);
