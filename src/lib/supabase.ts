@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://fvbmckogcizaxdnlsrto.supabase.co';
@@ -29,6 +28,15 @@ export type Profile = {
   rating: number;
   created_at: string;
   updated_at?: string;
+};
+
+export type RatingHistory = {
+  id: string;
+  user_id: string;
+  rating: number;
+  battle_id: string | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export type Battle = {

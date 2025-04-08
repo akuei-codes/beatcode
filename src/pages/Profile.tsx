@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, Battle } from '@/lib/supabase';
+import { supabase, Battle, RatingHistory } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { 
   Card, 
@@ -28,6 +27,7 @@ import {
 } from 'lucide-react';
 import BattlesList from '@/components/profile/BattlesList';
 import StatsOverview from '@/components/profile/StatsOverview';
+import RatingHistoryChart from '@/components/profile/RatingHistoryChart';
 import { LoaderCircle } from 'lucide-react';
 
 const Profile = () => {
@@ -37,6 +37,7 @@ const Profile = () => {
   const [activeBattle, setActiveBattle] = useState<Battle | null>(null);
   const [createdBattles, setCreatedBattles] = useState<Battle[]>([]);
   const [joinedBattles, setJoinedBattles] = useState<Battle[]>([]);
+  const [ratingHistory, setRatingHistory] = useState<RatingHistory[]>([]);
   const [stats, setStats] = useState({
     totalBattles: 0,
     wins: 0,
@@ -97,6 +98,19 @@ const Profile = () => {
         console.error('Error fetching joined battles:', joinedError);
       } else {
         setJoinedBattles(joinedData || []);
+      }
+      
+      // Fetch rating history
+      const { data: historyData, error: historyError } = await supabase
+        .from('rating_history')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+      
+      if (historyError) {
+        console.error('Error fetching rating history:', historyError);
+      } else {
+        setRatingHistory(historyData || []);
       }
       
       // Calculate statistics
@@ -267,6 +281,14 @@ const Profile = () => {
           </Card>
         </div>
       )}
+
+      {/* Rating History Chart */}
+      <div className="mb-8">
+        <RatingHistoryChart 
+          ratingHistory={ratingHistory} 
+          isLoading={isLoading} 
+        />
+      </div>
 
       {/* Battles Tabs */}
       <Tabs defaultValue="overview" className="w-full">

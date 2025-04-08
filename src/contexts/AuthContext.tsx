@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, Profile } from '@/lib/supabase';
@@ -33,7 +32,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for active session
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
@@ -48,7 +46,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     getSession();
 
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change event:', event);
       setSession(session);
@@ -83,7 +80,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Error fetching profile:', error);
-        // Instead of returning early, we'll create a profile
         await createUserProfile(userId);
         return;
       }
@@ -91,12 +87,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data) {
         console.log('Profile found:', data);
         setProfile(data as Profile);
+        
+        await ensureRatingHistory(userId);
       } else {
-        // Create a new profile if it doesn't exist
         await createUserProfile(userId);
       }
     } catch (err) {
       console.error('Exception in fetchProfile:', err);
+    }
+  };
+  
+  const ensureRatingHistory = async (userId: string) => {
+    try {
+      const { count, error } = await supabase
+        .from('rating_history')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+      
+      if (error) {
+        console.error('Error checking rating history:', error);
+        return;
+      }
+      
+      if (count === 0) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('rating, created_at')
+          .eq('id', userId)
+          .single();
+        
+        if (profileData) {
+          await supabase
+            .from('rating_history')
+            .insert({
+              user_id: userId,
+              rating: profileData.rating,
+              notes: 'Initial rating',
+              created_at: profileData.created_at
+            });
+          
+          console.log('Created initial rating history entry');
+        }
+      }
+    } catch (err) {
+      console.error('Error ensuring rating history:', err);
     }
   };
   
@@ -128,6 +162,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           console.log('Profile created successfully:', data);
           setProfile(data as Profile);
+          
+          await supabase
+            .from('rating_history')
+            .insert({
+              user_id: userData.user.id,
+              rating: 1000,
+              notes: 'Initial rating',
+              created_at: new Date().toISOString()
+            });
+          
+          console.log('Created initial rating history entry');
         }
       }
     } catch (err) {
@@ -136,13 +181,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGithub = async () => {
-    // First, check if the join_battle function exists in the database
     try {
       const { data, error } = await supabase.rpc('check_function_exists', {
         function_name: 'join_battle'
       });
       
-      // If the function doesn't exist, create it
       if (!data || error) {
         console.log('Creating join_battle function...');
         
@@ -174,7 +217,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error checking/creating function:', err);
     }
     
-    // Continue with GitHub sign in
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
