@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://fvbmckogcizaxdnlsrto.supabase.co';
@@ -15,7 +16,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
   global: {
-    fetch: (...args) => fetch(...args),
+    fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
   },
 });
 
