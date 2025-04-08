@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Battle } from '@/lib/supabase';
@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Trophy,
   ChevronsRight,
-  Clock,
   Code,
   ShieldCheck,
   User,
@@ -37,8 +36,8 @@ const BattlesList: React.FC<BattlesListProps> = ({ battles, emptyMessage, isLoad
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  // Language color mapping
-  const languageColors: Record<string, string> = {
+  // Memoize language color mapping to avoid recalculating on every render
+  const languageColors = useMemo(() => ({
     'javascript': 'bg-yellow-500',
     'python': 'bg-blue-600',
     'java': 'bg-red-600',
@@ -49,16 +48,17 @@ const BattlesList: React.FC<BattlesListProps> = ({ battles, emptyMessage, isLoad
     'rust': 'bg-orange-600',
     'kotlin': 'bg-purple-500',
     'swift': 'bg-orange-500',
-  };
+  }), []);
 
-  const getDifficultyColor = (difficulty: string) => {
+  // Memoize difficulty color function to avoid recalculating
+  const getDifficultyColor = useMemo(() => (difficulty: string) => {
     switch (difficulty) {
       case 'Easy': return 'bg-green-500';
       case 'Medium': return 'bg-yellow-500';
       case 'Hard': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
-  };
+  }, []);
 
   const handleViewBattle = (battleId: string) => {
     navigate(`/battle/${battleId}`);
@@ -72,7 +72,7 @@ const BattlesList: React.FC<BattlesListProps> = ({ battles, emptyMessage, isLoad
     );
   }
 
-  if (battles.length === 0) {
+  if (!battles || battles.length === 0) {
     return (
       <Card className="bg-card/50">
         <CardContent className="flex flex-col items-center justify-center py-12">
@@ -82,6 +82,9 @@ const BattlesList: React.FC<BattlesListProps> = ({ battles, emptyMessage, isLoad
       </Card>
     );
   }
+
+  // Only render the most recent 10 battles to improve performance
+  const recentBattles = battles.slice(0, 10);
 
   return (
     <div className="bg-card/50 rounded-lg border overflow-hidden">
@@ -99,7 +102,7 @@ const BattlesList: React.FC<BattlesListProps> = ({ battles, emptyMessage, isLoad
             </TableRow>
           </TableHeader>
           <TableBody>
-            {battles.map((battle) => (
+            {recentBattles.map((battle) => (
               <TableRow key={battle.id}>
                 <TableCell className="font-medium">
                   {new Date(battle.created_at).toLocaleDateString()}
@@ -155,8 +158,13 @@ const BattlesList: React.FC<BattlesListProps> = ({ battles, emptyMessage, isLoad
           </TableBody>
         </Table>
       </div>
+      {battles.length > 10 && (
+        <div className="p-2 text-center text-sm text-muted-foreground">
+          Showing 10 of {battles.length} battles for better performance
+        </div>
+      )}
     </div>
   );
 };
 
-export default BattlesList;
+export default React.memo(BattlesList);
