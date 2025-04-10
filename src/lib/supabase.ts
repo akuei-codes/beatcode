@@ -78,16 +78,16 @@ export const initializeDatabase = async () => {
   try {
     console.log('Initializing database tables...');
     
-    // Create profiles table - using the structure from your schema
-    const createProfilesTableSQL = `
-      CREATE TABLE IF NOT EXISTS profiles (
+    // Create users table - using the structure from the schema
+    const createUsersTableSQL = `
+      CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY REFERENCES auth.users(id),
-        username TEXT NOT NULL,
-        email TEXT,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE,
         avatar_url TEXT,
         rating INTEGER DEFAULT 1000,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `;
     
@@ -155,10 +155,10 @@ export const initializeDatabase = async () => {
     
     // Try to execute SQL statements
     try {
-      await supabase.rpc('exec_sql', { sql: createProfilesTableSQL });
-      console.log('Profiles table created or already exists');
+      await supabase.rpc('exec_sql', { sql: createUsersTableSQL });
+      console.log('Users table created or already exists');
     } catch (err) {
-      console.warn('Failed to create profiles table:', err);
+      console.warn('Failed to create users table:', err);
     }
     
     try {
@@ -192,7 +192,7 @@ export const initializeDatabase = async () => {
     // Setup RLS policies based on your schema
     try {
       // Enable RLS on all tables
-      await supabase.rpc('exec_sql', { sql: `ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;` });
+      await supabase.rpc('exec_sql', { sql: `ALTER TABLE users ENABLE ROW LEVEL SECURITY;` });
       await supabase.rpc('exec_sql', { sql: `ALTER TABLE rating_history ENABLE ROW LEVEL SECURITY;` });
       await supabase.rpc('exec_sql', { sql: `ALTER TABLE battles ENABLE ROW LEVEL SECURITY;` });
       await supabase.rpc('exec_sql', { sql: `ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;` });
@@ -217,6 +217,21 @@ export const initializeDatabase = async () => {
         ON rating_history
         FOR UPDATE 
         USING (auth.uid() = user_id);
+      ` });
+      
+      // Create policies for users table
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE POLICY IF NOT EXISTS "Users are viewable by everyone" 
+        ON users
+        FOR SELECT 
+        USING (true);
+      ` });
+      
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE POLICY IF NOT EXISTS "Users can update their own data" 
+        ON users
+        FOR UPDATE 
+        USING (auth.uid() = id);
       ` });
       
       // Create indexes for rating_history as defined in your schema
