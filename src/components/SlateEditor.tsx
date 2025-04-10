@@ -147,8 +147,8 @@ const SlateEditor: React.FC<SlateEditorProps> = ({
       {/* Editor */}
       <Slate
         editor={editor}
-        value={value}
-        onChange={(newValue) => {
+        initialValue={initialContent}
+        onChange={newValue => {
           setValue(newValue);
         }}
       >
