@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, Profile } from '@/lib/supabase';
@@ -33,15 +34,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
+      } catch (error) {
+        console.error("Error getting session:", error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
     
     getSession();
@@ -72,6 +77,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log('Fetching profile for user ID:', userId);
       
+      // Check if profiles table exists before querying
+      const { error: tableError } = await supabase
+        .from('profiles')
+        .select('count')
+        .limit(1)
+        .single();
+      
+      if (tableError && tableError.code === '42P01') {
+        // Table doesn't exist, create it
+        await createProfilesTable();
+      }
+        
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -80,7 +97,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Error fetching profile:', error);
-        await createUserProfile(userId);
+        // Only try to create profile if the error is not a connection error
+        if (error.code !== 'PGRST12') {
+          await createUserProfile(userId);
+        }
         return;
       }
 
@@ -97,8 +117,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
   
+  const createProfilesTable = async () => {
+    try {
+      const createTableSQL = `
+        CREATE TABLE IF NOT EXISTS profiles (
+          id UUID PRIMARY KEY,
+          username TEXT NOT NULL,
+          email TEXT,
+          avatar_url TEXT,
+          rating INTEGER DEFAULT 1000,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE
+        );
+      `;
+      
+      await supabase.rpc('exec_sql', { sql: createTableSQL });
+      console.log('Created profiles table');
+      
+      const createRatingHistoryTableSQL = `
+        CREATE TABLE IF NOT EXISTS rating_history (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES profiles(id),
+          rating INTEGER NOT NULL,
+          battle_id UUID,
+          notes TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      
+      await supabase.rpc('exec_sql', { sql: createRatingHistoryTableSQL });
+      console.log('Created rating_history table');
+    } catch (err) {
+      console.error('Error creating tables:', err);
+    }
+  };
+  
   const ensureRatingHistory = async (userId: string) => {
     try {
+      // Check if rating_history table exists
+      const { error: tableError } = await supabase
+        .from('rating_history')
+        .select('count')
+        .limit(1)
+        .single();
+      
+      if (tableError && tableError.code === '42P01') {
+        // Table doesn't exist, skip this operation
+        console.log('Rating history table does not exist');
+        return;
+      }
+      
       const { count, error } = await supabase
         .from('rating_history')
         .select('*', { count: 'exact', head: true })
@@ -163,16 +231,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.log('Profile created successfully:', data);
           setProfile(data as Profile);
           
-          await supabase
-            .from('rating_history')
-            .insert({
-              user_id: userData.user.id,
-              rating: 1000,
-              notes: 'Initial rating',
-              created_at: new Date().toISOString()
-            });
-          
-          console.log('Created initial rating history entry');
+          try {
+            await supabase
+              .from('rating_history')
+              .insert({
+                user_id: userData.user.id,
+                rating: 1000,
+                notes: 'Initial rating',
+                created_at: new Date().toISOString()
+              });
+            
+            console.log('Created initial rating history entry');
+          } catch (err) {
+            console.error('Error creating rating history:', err);
+          }
         }
       }
     } catch (err) {

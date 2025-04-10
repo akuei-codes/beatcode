@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// Use the correct Supabase URL and key from .env (or fallback values)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://fvbmckogcizaxdnlsrto.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2Ym1ja29nY2l6YXhkbmxzcnRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMzMDUzODcsImV4cCI6MjA1ODg4MTM4N30.-t69uwAO88KufYBYi24v1eolbHw6ks7cR2IqX1lISW4';
 
