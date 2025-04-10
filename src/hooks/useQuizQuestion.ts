@@ -24,7 +24,7 @@ export function useQuizQuestion(questionIndex: number) {
   const [explanation, setExplanation] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
-  const [usedFallback, setUsedFallback] = useState<boolean>(false);
+  const [usedFallback, setUsedFallback] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchQuestion = async () => {
@@ -43,7 +43,7 @@ export function useQuizQuestion(questionIndex: number) {
           return;
         }
 
-        // Always use fallback questions as the API is having issues
+        // Always use fallback questions for reliability
         const fallbackIndex = questionIndex % fallbackQuizQuestions.length;
         const fallbackQuestion = fallbackQuizQuestions[fallbackIndex];
         
@@ -59,6 +59,16 @@ export function useQuizQuestion(questionIndex: number) {
       } catch (err) {
         console.error('Error fetching question:', err);
         setError(err instanceof Error ? err : new Error('An unknown error occurred'));
+        
+        // Use fallback in case of error
+        const fallbackIndex = questionIndex % fallbackQuizQuestions.length;
+        const fallbackQuestion = fallbackQuizQuestions[fallbackIndex];
+        
+        setQuestion(fallbackQuestion.question);
+        setOptions(fallbackQuestion.options);
+        setCorrectAnswer(fallbackQuestion.correctAnswer);
+        setExplanation(fallbackQuestion.explanation);
+        setUsedFallback(true);
       } finally {
         setIsLoading(false);
       }
