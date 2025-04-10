@@ -130,7 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const ensureRatingHistory = async (userId: string) => {
     try {
-      // Try to count rating history entries
+      // Try to count rating history entries - using the schema directly referencing auth.users
       const { count, error } = await supabase
         .from('rating_history')
         .select('*', { count: 'exact', head: true })
@@ -196,6 +196,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setProfile(data as Profile);
           
           try {
+            // Create initial rating history using the schema directly referencing auth.users
             await supabase
               .from('rating_history')
               .insert({

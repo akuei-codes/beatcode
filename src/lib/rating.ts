@@ -16,7 +16,7 @@ export async function recordRatingChange(
   notes?: string | null
 ): Promise<RatingHistory | null> {
   try {
-    // First update the user's current rating
+    // First update the user's current rating in profiles table
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ rating: newRating, updated_at: new Date().toISOString() })
@@ -27,7 +27,7 @@ export async function recordRatingChange(
       return null;
     }
     
-    // Then add a rating history entry
+    // Then add a rating history entry directly referencing auth.users(id)
     const { data, error } = await supabase
       .from('rating_history')
       .insert({

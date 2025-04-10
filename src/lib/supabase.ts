@@ -58,10 +58,10 @@ export type Submission = {
   user_id: string;
   code: string;
   language: string;
-  status: 'pending' | 'correct' | 'incorrect' | 'evaluated';
-  submitted_at: string;
+  status: 'pending' | 'correct' | 'incorrect' | 'evaluated' | 'error';
   score: number | null;
   feedback: string | null;
+  submitted_at: string;
   evaluated_at: string | null;
 };
 
@@ -78,10 +78,10 @@ export const initializeDatabase = async () => {
   try {
     console.log('Initializing database tables...');
     
-    // Create profiles table
+    // Create profiles table - using the structure from your schema
     const createProfilesTableSQL = `
       CREATE TABLE IF NOT EXISTS profiles (
-        id UUID PRIMARY KEY,
+        id UUID PRIMARY KEY REFERENCES auth.users(id),
         username TEXT NOT NULL,
         email TEXT,
         avatar_url TEXT,
@@ -91,11 +91,11 @@ export const initializeDatabase = async () => {
       );
     `;
     
-    // Create rating_history table
+    // Create rating_history table - using the exact structure from your schema
     const createRatingHistoryTableSQL = `
       CREATE TABLE IF NOT EXISTS rating_history (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        user_id UUID NOT NULL REFERENCES profiles(id),
+        user_id UUID NOT NULL REFERENCES auth.users(id),
         rating INTEGER NOT NULL,
         battle_id UUID,
         notes TEXT,
@@ -107,33 +107,33 @@ export const initializeDatabase = async () => {
     const createBattlesTableSQL = `
       CREATE TABLE IF NOT EXISTS battles (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        creator_id UUID NOT NULL REFERENCES profiles(id),
-        defender_id UUID REFERENCES profiles(id),
+        creator_id UUID NOT NULL REFERENCES auth.users(id),
+        defender_id UUID REFERENCES auth.users(id),
         problem_id INTEGER NOT NULL,
         programming_language TEXT NOT NULL,
-        difficulty TEXT NOT NULL,
+        difficulty TEXT NOT NULL CHECK (difficulty IN ('Easy', 'Medium', 'Hard')),
         duration INTEGER NOT NULL,
-        battle_type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        winner_id UUID REFERENCES profiles(id),
+        battle_type TEXT NOT NULL CHECK (battle_type IN ('Rated', 'Casual')),
+        status TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'completed')),
+        winner_id UUID REFERENCES auth.users(id),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         started_at TIMESTAMP WITH TIME ZONE,
         ended_at TIMESTAMP WITH TIME ZONE
       );
     `;
     
-    // Create submissions table
+    // Create submissions table with nullable fields as per your schema
     const createSubmissionsTableSQL = `
       CREATE TABLE IF NOT EXISTS submissions (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         battle_id UUID NOT NULL REFERENCES battles(id),
-        user_id UUID NOT NULL REFERENCES profiles(id),
+        user_id UUID NOT NULL REFERENCES auth.users(id),
         code TEXT NOT NULL,
         language TEXT NOT NULL,
-        status TEXT NOT NULL,
-        submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        status TEXT NOT NULL CHECK (status IN ('pending', 'correct', 'incorrect', 'evaluated', 'error')),
         score INTEGER,
         feedback TEXT,
+        submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         evaluated_at TIMESTAMP WITH TIME ZONE
       );
     `;
@@ -187,6 +187,52 @@ export const initializeDatabase = async () => {
       console.log('join_battle function created or already exists');
     } catch (err) {
       console.warn('Failed to create join_battle function:', err);
+    }
+    
+    // Setup RLS policies based on your schema
+    try {
+      // Enable RLS on all tables
+      await supabase.rpc('exec_sql', { sql: `ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;` });
+      await supabase.rpc('exec_sql', { sql: `ALTER TABLE rating_history ENABLE ROW LEVEL SECURITY;` });
+      await supabase.rpc('exec_sql', { sql: `ALTER TABLE battles ENABLE ROW LEVEL SECURITY;` });
+      await supabase.rpc('exec_sql', { sql: `ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;` });
+      
+      // Create RLS policies for rating_history as defined in your schema
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE POLICY IF NOT EXISTS "Rating history is viewable by everyone" 
+        ON rating_history
+        FOR SELECT 
+        USING (true);
+      ` });
+      
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE POLICY IF NOT EXISTS "Users can add to their own rating history" 
+        ON rating_history
+        FOR INSERT 
+        WITH CHECK (auth.uid() = user_id);
+      ` });
+      
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE POLICY IF NOT EXISTS "Users can update their own rating history" 
+        ON rating_history
+        FOR UPDATE 
+        USING (auth.uid() = user_id);
+      ` });
+      
+      // Create indexes for rating_history as defined in your schema
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE INDEX IF NOT EXISTS idx_rating_history_user_id 
+        ON rating_history(user_id);
+      ` });
+      
+      await supabase.rpc('exec_sql', { sql: `
+        CREATE INDEX IF NOT EXISTS idx_rating_history_battle_id 
+        ON rating_history(battle_id);
+      ` });
+      
+      console.log('RLS policies and indexes created or already exist');
+    } catch (err) {
+      console.warn('Failed to create some RLS policies or indexes:', err);
     }
     
     console.log('Database initialization completed');

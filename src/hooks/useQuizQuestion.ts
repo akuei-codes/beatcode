@@ -43,7 +43,7 @@ export function useQuizQuestion(questionIndex: number) {
           return;
         }
 
-        // Always use fallback questions for reliability
+        // Always use fallback questions for reliability since we're focusing on database schema right now
         const fallbackIndex = questionIndex % fallbackQuizQuestions.length;
         const fallbackQuestion = fallbackQuizQuestions[fallbackIndex];
         
