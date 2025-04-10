@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -144,6 +145,7 @@ const BattleArena = () => {
     
     setIsSubmitting(true);
     setEvaluationProgress(10);
+    let submissionData: Submission | null = null;
 
     try {
       console.log("Starting submission with data:", {
@@ -197,7 +199,11 @@ const BattleArena = () => {
       }
   
       console.log("Submission created successfully:", submission.id);
+      submissionData = submission; // Store submission in a variable accessible in the catch block
       setEvaluationProgress(40);
+      
+      // Setup abort controller for timeout handling
+      abortControllerRef.current = new AbortController();
       
       const timeoutId = setTimeout(() => {
         if (abortControllerRef.current) {
@@ -290,26 +296,30 @@ const BattleArena = () => {
       console.error('Evaluation error:', evalError);
       if (evalError instanceof DOMException && evalError.name === 'AbortError') {
         toast.error('Evaluation timed out. Please try again with simpler code.');
-        const { error: fallbackError } = await supabase
-          .from('submissions')
-          .update({
-            status: 'evaluated',
-            score: 50,
-            feedback: "Evaluation timed out. This might be due to code complexity or server load. Your submission has been assigned a provisional score.",
-            evaluated_at: new Date().toISOString(),
-          })
-          .eq('id', submission.id);
-          
-        if (!fallbackError) {
-          const { data: updatedSubmission } = await supabase
+        
+        // Use the stored submission data for the fallback update
+        if (submissionData) {
+          const { error: fallbackError } = await supabase
             .from('submissions')
-            .select('*')
-            .eq('id', submission.id)
-            .single();
+            .update({
+              status: 'evaluated',
+              score: 50,
+              feedback: "Evaluation timed out. This might be due to code complexity or server load. Your submission has been assigned a provisional score.",
+              evaluated_at: new Date().toISOString(),
+            })
+            .eq('id', submissionData.id);
             
-          if (updatedSubmission) {
-            setSubmissionResult(updatedSubmission as Submission);
-            setShowScoreDialog(true);
+          if (!fallbackError) {
+            const { data: updatedSubmission } = await supabase
+              .from('submissions')
+              .select('*')
+              .eq('id', submissionData.id)
+              .single();
+              
+            if (updatedSubmission) {
+              setSubmissionResult(updatedSubmission as Submission);
+              setShowScoreDialog(true);
+            }
           }
         }
       } else {
