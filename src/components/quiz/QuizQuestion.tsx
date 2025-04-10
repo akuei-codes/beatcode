@@ -5,7 +5,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useQuizQuestion } from '@/hooks/useQuizQuestion';
 
 interface QuizQuestionProps {
@@ -27,7 +27,8 @@ export const QuizQuestion: React.FC<QuizQuestionProps> = ({
     options, 
     isLoading, 
     error,
-    checkAnswer
+    checkAnswer,
+    usedFallback
   } = useQuizQuestion(questionIndex);
 
   // Reset state when question changes
@@ -90,6 +91,12 @@ export const QuizQuestion: React.FC<QuizQuestionProps> = ({
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="text-xl">Question</CardTitle>
+        {usedFallback && (
+          <div className="flex items-center space-x-2 text-amber-600 text-sm mb-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span>Using local question bank (API unavailable)</span>
+          </div>
+        )}
         <CardDescription className="whitespace-pre-wrap">
           {question}
         </CardDescription>
