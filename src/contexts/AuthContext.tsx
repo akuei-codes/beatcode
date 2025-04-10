@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, Profile, initializeDatabase } from '@/lib/supabase';
+import { supabase, Profile, initializeDatabase, tableExists } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -38,16 +38,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       
       try {
-        // Initialize database tables first
-        const initialized = await initializeDatabase();
-        setDbInitialized(initialized);
+        // Check if required tables exist
+        const usersExist = await tableExists('users');
+        const ratingHistoryExists = await tableExists('rating_history');
         
-        if (!initialized) {
-          console.warn("Database initialization failed. Some features may not work correctly.");
-          toast.error("Failed to initialize database. Please try again later.");
+        setDbInitialized(usersExist && ratingHistoryExists);
+        
+        if (!usersExist || !ratingHistoryExists) {
+          console.warn("Some required tables don't exist. Please create them in the Supabase dashboard.");
+          toast.error("Database tables not found. Some features may not work correctly.");
         }
         
-        // Get the session regardless of database initialization
+        // Get the session regardless of table existence
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         setUser(session?.user ?? null);
@@ -71,11 +73,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (event === 'SIGNED_IN' && session?.user) {
-        if (!dbInitialized) {
-          // Try initializing again if it failed initially
-          const initialized = await initializeDatabase();
-          setDbInitialized(initialized);
-        }
+        // Check tables exist on sign in
+        const usersExist = await tableExists('users');
+        const ratingHistoryExists = await tableExists('rating_history');
+        setDbInitialized(usersExist && ratingHistoryExists);
         
         await fetchProfile(session.user.id);
         toast.success('Signed in successfully!');
@@ -91,19 +92,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate, dbInitialized]);
+  }, [navigate]);
 
   const fetchProfile = async (userId: string) => {
     try {
       console.log('Fetching profile for user ID:', userId);
       
-      // Check if we need to create the tables
-      if (!dbInitialized) {
-        await initializeDatabase();
-        setDbInitialized(true);
+      // Check if users table exists
+      if (!await tableExists('users')) {
+        console.error('Users table does not exist');
+        toast.error('User profiles are not available');
+        return;
       }
       
-      // Query users table directly (not profiles)
+      // Query users table
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -130,6 +132,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const ensureRatingHistory = async (userId: string) => {
     try {
+      // Check if rating_history table exists
+      if (!await tableExists('rating_history')) {
+        console.error('Rating history table does not exist');
+        return;
+      }
+      
       // Try to count rating history entries
       const { count, error } = await supabase
         .from('rating_history')
@@ -196,20 +204,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.log('Profile created successfully:', data);
           setProfile(data as Profile);
           
-          try {
-            // Create initial rating history
-            await supabase
-              .from('rating_history')
-              .insert({
-                user_id: userData.user.id,
-                rating: 1000,
-                notes: 'Initial rating',
-                created_at: new Date().toISOString()
-              });
-            
-            console.log('Created initial rating history entry');
-          } catch (err) {
-            console.error('Error creating rating history:', err);
+          // Check if rating_history table exists
+          if (await tableExists('rating_history')) {
+            try {
+              // Create initial rating history
+              await supabase
+                .from('rating_history')
+                .insert({
+                  user_id: userData.user.id,
+                  rating: 1000,
+                  notes: 'Initial rating',
+                  created_at: new Date().toISOString()
+                });
+              
+              console.log('Created initial rating history entry');
+            } catch (err) {
+              console.error('Error creating rating history:', err);
+            }
           }
         }
       }
@@ -219,12 +230,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGithub = async () => {
-    // Initialize database if not already done
-    if (!dbInitialized) {
-      const initialized = await initializeDatabase();
-      setDbInitialized(initialized);
-    }
-    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {

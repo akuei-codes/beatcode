@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -61,7 +62,7 @@ const CreateBattle = () => {
       
       console.log("Creating battle with problem:", randomProblem.id);
       
-      // Create battle in Supabase with the correct schema
+      // Create battle in Supabase
       const { data: battle, error } = await supabase
         .from('battles')
         .insert([
