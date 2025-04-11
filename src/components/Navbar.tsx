@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Menu, X, LogOut, User } from 'lucide-react';
+import { Menu, X, LogOut, User, Trophy } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   DropdownMenu,
@@ -63,6 +64,14 @@ const Navbar = () => {
               onClick={() => navigate('/join-battle')}
             >
               Join Battle
+            </Button>
+            <Button 
+              variant="ghost" 
+              className={`text-sm ${location.pathname === '/leaderboard' ? 'text-icon-accent' : 'text-icon-white'} hover:text-icon-accent`}
+              onClick={() => navigate('/leaderboard')}
+            >
+              <Trophy className="mr-1 h-4 w-4" />
+              Leaderboard
             </Button>
             
             <div className="ml-4 flex items-center space-x-2">
@@ -158,6 +167,14 @@ const Navbar = () => {
               onClick={() => { navigate('/join-battle'); setIsMobileMenuOpen(false); }}
             >
               Join Battle
+            </Button>
+            <Button 
+              variant="ghost" 
+              className={`w-full justify-start ${location.pathname === '/leaderboard' ? 'text-icon-accent' : 'text-icon-white'}`}
+              onClick={() => { navigate('/leaderboard'); setIsMobileMenuOpen(false); }}
+            >
+              <Trophy className="mr-1 h-4 w-4" />
+              Leaderboard
             </Button>
             
             <div className="pt-4 pb-2 border-t border-icon-gray/30">

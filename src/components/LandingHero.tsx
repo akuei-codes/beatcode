@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Code, ArrowRight, Award, Timer, BookOpen } from 'lucide-react';
+import { Code, ArrowRight, Award, Timer, BookOpen, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
@@ -52,6 +52,14 @@ const LandingHero = () => {
           
           <Button 
             className="icon-button icon-button-secondary group"
+            onClick={() => navigate('/leaderboard')}
+          >
+            Leaderboard
+            <Trophy className="ml-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+          </Button>
+          
+          <Button 
+            className="icon-button icon-button-secondary group"
             onClick={() => navigate('/quizzes')}
           >
             Practice Quizzes
@@ -80,10 +88,10 @@ const LandingHero = () => {
         
         <div className="bg-icon-dark-gray p-6 rounded-lg border border-icon-gray">
           <div className="h-12 w-12 rounded-full bg-icon-accent/20 flex items-center justify-center mb-4">
-            <BookOpen className="h-6 w-6 text-icon-accent" />
+            <Trophy className="h-6 w-6 text-icon-accent" />
           </div>
-          <h3 className="text-xl font-semibold mb-2">Practice Quizzes</h3>
-          <p className="text-icon-light-gray">Test your knowledge with multiple-choice quizzes on algorithms and data structures.</p>
+          <h3 className="text-xl font-semibold mb-2">Global Rankings</h3>
+          <p className="text-icon-light-gray">Compete with coders worldwide and climb the leaderboard with each victory.</p>
         </div>
       </div>
     </div>
