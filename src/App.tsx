@@ -34,6 +34,7 @@ const Signup = lazy(() => import("./pages/Signup"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Quizzes = lazy(() => import("./pages/Quizzes"));
+const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 
 // Loading component
 const LoadingFallback = () => (
@@ -62,6 +63,7 @@ const App = () => (
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/quizzes" element={<Quizzes />} />
+                  <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

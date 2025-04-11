@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Use the correct Supabase URL and key from .env (or fallback values)
@@ -204,6 +203,31 @@ export const optimizedFetch = async <T>(
     return data as (T | T[]);
   } catch (error) {
     console.error(`Error fetching from ${table}:`, error);
+    return null;
+  }
+};
+
+/**
+ * Fetches leaderboard data of top users ranked by rating
+ * @param limit The maximum number of users to fetch (default: 100)
+ * @returns Array of user profiles sorted by rating or null if there was an error
+ */
+export const fetchLeaderboard = async (limit: number = 100): Promise<Profile[] | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, rating, avatar_url, created_at')
+      .order('rating', { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error fetching leaderboard:', error);
+      return null;
+    }
+    
+    return data as Profile[];
+  } catch (error) {
+    console.error('Exception in fetchLeaderboard:', error);
     return null;
   }
 };
