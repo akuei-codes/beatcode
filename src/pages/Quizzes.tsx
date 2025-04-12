@@ -29,15 +29,13 @@ const Quizzes: React.FC = () => {
       setCorrectAnswers(prev => prev + 1);
     }
     
-    // Move to next question after a short delay
-    setTimeout(() => {
-      if (totalAnswered + 1 >= 5) {
-        // Show summary after 5 questions
-        setShowSummary(true);
-      } else {
-        setCurrentQuestionIndex(prev => prev + 1);
-      }
-    }, 1500);
+    // Move to next question or show summary
+    if (totalAnswered + 1 >= 5) {
+      // Show summary after 5 questions
+      setShowSummary(true);
+    } else {
+      setCurrentQuestionIndex(prev => prev + 1);
+    }
   };
 
   const handleRestartQuiz = () => {

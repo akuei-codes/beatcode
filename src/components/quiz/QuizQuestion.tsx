@@ -5,7 +5,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useQuizQuestion } from '@/hooks/useQuizQuestion';
 
 interface QuizQuestionProps {
@@ -54,13 +54,15 @@ export const QuizQuestion: React.FC<QuizQuestionProps> = ({
       const result = await checkAnswer(selectedOption);
       setIsCorrect(result.isCorrect);
       setExplanation(result.explanation);
-      onAnswered(result.isCorrect);
     } catch (error) {
       console.error('Error checking answer:', error);
       setIsCorrect(false);
       setExplanation('An error occurred while checking your answer.');
-      onAnswered(false);
     }
+  };
+
+  const handleNextQuestion = () => {
+    onAnswered(isCorrect || false);
   };
 
   if (isLoading) {
@@ -149,13 +151,23 @@ export const QuizQuestion: React.FC<QuizQuestionProps> = ({
         )}
       </CardContent>
       <CardFooter>
-        <Button 
-          onClick={handleSubmitAnswer} 
-          disabled={!selectedOption || isAnswerSubmitted}
-          className="w-full"
-        >
-          {isAnswerSubmitted ? 'Next Question Loading...' : 'Submit Answer'}
-        </Button>
+        {!isAnswerSubmitted ? (
+          <Button 
+            onClick={handleSubmitAnswer} 
+            disabled={!selectedOption}
+            className="w-full"
+          >
+            Submit Answer
+          </Button>
+        ) : (
+          <Button 
+            onClick={handleNextQuestion}
+            className="w-full flex items-center justify-center gap-2"
+          >
+            Next Question
+            <ArrowRight size={16} />
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );
