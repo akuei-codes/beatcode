@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -14,7 +13,8 @@ import {
   Loader2,
   Code,
   MessageCircle,
-  Trophy
+  Trophy,
+  Camera
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,6 +30,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import CameraFeed from '@/components/camera/CameraFeed';
 
 interface ChatMessage {
   id: string;
@@ -71,6 +72,8 @@ const BattleArena = () => {
     winner: null,
     ratingChange: null
   });
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const autoSubmitRef = useRef<boolean>(false);
@@ -659,6 +662,14 @@ const BattleArena = () => {
     document.removeEventListener('mouseup', endDrag);
   };
 
+  const handleCameraStatusChange = (isActive: boolean) => {
+    setCameraActive(isActive);
+  };
+
+  const toggleCamera = () => {
+    setShowCamera(prev => !prev);
+  };
+
   if (isLoading || isProblemLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -686,6 +697,10 @@ const BattleArena = () => {
         </div>
         <div className="flex items-center gap-4">
           <span>Time Left: {formatTime(timeLeft)}</span>
+          <Button variant="ghost" size="icon" onClick={toggleCamera} className="relative">
+            <Camera className="h-4 w-4" />
+            {cameraActive && <span className="absolute top-0 right-0 h-2 w-2 bg-green-500 rounded-full"></span>}
+          </Button>
           {!isTimerRunning && (
             <Button variant="ghost" size="icon" onClick={() => setIsTimerRunning(true)}>
               <PlayCircle className="h-4 w-4" />
@@ -775,6 +790,17 @@ const BattleArena = () => {
         </ResizablePanel>
       </ResizablePanelGroup>
 
+      {/* Camera Feed */}
+      {showCamera && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <CameraFeed 
+            size="md" 
+            onCameraStatusChange={handleCameraStatusChange}
+            className="bg-black/80 p-2 rounded-lg shadow-lg"
+          />
+        </div>
+      )}
+
       <div
         ref={chatBubbleRef}
         onMouseDown={startDrag}
@@ -850,123 +876,4 @@ const BattleArena = () => {
         <DialogContent className="bg-icon-dark-gray border border-icon-gray">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center text-icon-accent">
-              You scored {submissionResult?.score || 0}%
-            </DialogTitle>
-            <DialogDescription className="text-center mt-2 text-white">
-              {submissionResult?.feedback || 'Your code has been evaluated.'}
-            </DialogDescription>
-            
-            <div className="mt-4 bg-icon-gray p-4 rounded-md border border-icon-gray/30">
-              <p className="text-sm text-icon-light-gray text-center mb-2">
-                {battle.status === 'completed' 
-                  ? "The battle has ended. View the final results."
-                  : "The winner will be announced once all players have submitted their solutions."}
-              </p>
-              
-              {battle.status === 'completed' && (
-                <Button 
-                  className="w-full mt-2" 
-                  onClick={() => {
-                    setShowScoreDialog(false);
-                    checkForBattleResults();
-                  }}
-                >
-                  View Battle Results
-                </Button>
-              )}
-            </div>
-          </DialogHeader>
-          <Button className="w-full mt-4" onClick={() => setShowScoreDialog(false)}>
-            Close
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* Final Battle Results Dialog */}
-      <Dialog open={showResultsDialog} onOpenChange={setShowResultsDialog}>
-        <DialogContent className="bg-icon-dark-gray border border-icon-gray max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-center">
-              Battle Results
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="py-6">
-            <div className="flex justify-between items-center mb-8 px-4">
-              <div className="text-center">
-                <div className="text-xl font-bold">You</div>
-                <div className="text-3xl font-bold text-icon-accent mt-2">
-                  {battleResults.myScore}%
-                </div>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-4xl font-bold text-gray-400">vs</div>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-xl font-bold">Opponent</div>
-                <div className="text-3xl font-bold text-icon-accent mt-2">
-                  {battleResults.opponentScore}%
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-icon-gray rounded-lg p-6 text-center">
-              {battleResults.winner === 'me' && (
-                <div className="flex flex-col items-center">
-                  <Trophy className="h-14 w-14 text-yellow-400 mb-3" />
-                  <h3 className="text-xl font-bold text-green-400 mb-1">You Won!</h3>
-                  <p className="text-icon-light-gray">
-                    Your rating increased by <span className="text-green-400 font-bold">+{battleResults.ratingChange}</span> points
-                  </p>
-                </div>
-              )}
-              
-              {battleResults.winner === 'opponent' && (
-                <div className="flex flex-col items-center">
-                  <XCircle className="h-14 w-14 text-red-400 mb-3" />
-                  <h3 className="text-xl font-bold text-red-400 mb-1">You Lost</h3>
-                  <p className="text-icon-light-gray">
-                    Your rating decreased by <span className="text-red-400 font-bold">{battleResults.ratingChange}</span> points
-                  </p>
-                </div>
-              )}
-              
-              {battleResults.winner === 'tie' && (
-                <div className="flex flex-col items-center">
-                  <div className="h-14 w-14 flex items-center justify-center mb-3">
-                    <div className="text-4xl">🤝</div>
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-400 mb-1">It's a Tie!</h3>
-                  <p className="text-icon-light-gray">No rating changes have been applied</p>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex gap-4">
-            <Button 
-              className="w-full" 
-              onClick={() => {
-                setShowResultsDialog(false);
-                navigate('/join-battle');
-              }}
-            >
-              Find a New Battle
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full" 
-              onClick={() => setShowResultsDialog(false)}
-            >
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
-export default BattleArena;
+              You scored {submissionResult?.score ||

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { QuizQuestion } from '@/components/quiz/QuizQuestion';
 import { QuizIntro } from '@/components/quiz/QuizIntro';
 import { Trophy, RotateCcw } from 'lucide-react';
+import CameraFeed from '@/components/camera/CameraFeed';
 
 const Quizzes: React.FC = () => {
   const [quizStarted, setQuizStarted] = useState(false);
@@ -13,6 +14,7 @@ const Quizzes: React.FC = () => {
   const [totalAnswered, setTotalAnswered] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   const navigate = useNavigate();
 
   const handleStartQuiz = () => {
@@ -44,6 +46,10 @@ const Quizzes: React.FC = () => {
 
   const handleFinishQuiz = () => {
     navigate('/');
+  };
+
+  const handleCameraStatusChange = (isActive: boolean) => {
+    setCameraActive(isActive);
   };
 
   const renderQuizContent = () => {
@@ -147,6 +153,17 @@ const Quizzes: React.FC = () => {
   return (
     <div className="container mx-auto py-10 px-4 max-w-4xl">
       <h1 className="text-3xl font-bold mb-8 text-center">Algorithm Practice Arena</h1>
+      
+      {quizStarted && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <CameraFeed 
+            size="sm" 
+            onCameraStatusChange={handleCameraStatusChange}
+            className="bg-black/80 p-2 rounded-lg shadow-lg"
+          />
+        </div>
+      )}
+      
       {renderQuizContent()}
     </div>
   );
