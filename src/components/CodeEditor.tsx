@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Save, X } from 'lucide-react';
+import { Play, Save, X, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface CodeEditorProps {
@@ -20,6 +20,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const [code, setCode] = useState(initialCode);
   const [output, setOutput] = useState<string | null>(null);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
+  const [isEstimating, setIsEstimating] = useState(false);
   
   // Map language to starter code
   useEffect(() => {
@@ -94,28 +95,60 @@ public:
     setCode(e.target.value);
   };
   
-  const handleRunCode = () => {
+  const handleRunCode = async () => {
     if (code.trim() === '') {
       toast.error("Code cannot be empty");
       return;
     }
     
-    // In a real app, this would send the code to a backend for execution
-    setOutput("Running your code...");
+    setIsEstimating(true);
+    setOutput("Analyzing your code...");
     setIsOutputOpen(true);
     
-    // Simulate code execution
-    setTimeout(() => {
-      if (Math.random() > 0.3) {
-        setOutput("✅ Test cases passed!\n\nInput: [2,7,11,15], target = 9\nExpected: [0,1]\nOutput: [0,1]\n\nInput: [3,2,4], target = 6\nExpected: [1,2]\nOutput: [1,2]");
-      } else {
-        setOutput("❌ Some test cases failed.\n\nInput: [2,7,11,15], target = 9\nExpected: [0,1]\nOutput: [0,1] ✓\n\nInput: [3,2,4], target = 6\nExpected: [1,2]\nOutput: null ✗");
+    try {
+      // Call GPT API to estimate test case passing rate
+      const response = await fetch("https://icon-scoring.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-01-01-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": "CKaJ47ef5qAohlZnQOd0fiJMDbisb6vz231KPbGHvyUFlZ6ldeVxJQQJ99BDACHYHv6XJ3w3AAABACOG0cot"
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content: "You are a code analyzer. Analyze the given code and estimate how many test cases out of 50 it might pass. Respond with ONLY a number followed by '/50' and a very brief comment. Format: 'Estimated: X/50 - Brief comment'"
+            },
+            {
+              role: "user",
+              content: `Language: ${language}\n\nCode:\n${code}`
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 100,
+          top_p: 1,
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
+      
+      const data = await response.json();
+      
+      // Extract the response content
+      const estimationResponse = data.choices[0].message.content;
+      setOutput(estimationResponse);
       
       if (onRunCode) {
         onRunCode(code);
       }
-    }, 1500);
+    } catch (error) {
+      console.error('Error estimating test cases:', error);
+      setOutput("Error analyzing code. Please try again.");
+    } finally {
+      setIsEstimating(false);
+    }
   };
   
   const handleSaveCode = () => {
@@ -159,10 +192,17 @@ public:
           <Button
             size="sm"
             onClick={handleRunCode}
+            disabled={isEstimating}
             className="h-8 text-xs bg-icon-accent text-icon-black hover:brightness-105"
           >
-            <Play size={14} className="mr-1" />
-            Run
+            {isEstimating ? (
+              <span className="animate-pulse">Analyzing...</span>
+            ) : (
+              <>
+                <Play size={14} className="mr-1" />
+                Run
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -182,7 +222,7 @@ public:
       {isOutputOpen && output && (
         <div className="border-t border-icon-gray">
           <div className="bg-icon-gray px-4 py-2 flex items-center justify-between">
-            <span className="text-sm font-medium">Output</span>
+            <span className="text-sm font-medium">Run Result</span>
             <Button
               variant="ghost"
               size="icon"
