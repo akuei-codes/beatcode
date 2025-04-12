@@ -1,3 +1,4 @@
+
 import { supabase, RatingHistory } from './supabase';
 
 /**
@@ -76,6 +77,34 @@ export function calculateNewRating(
   const newRating = Math.round(currentRating + kFactor * (actualOutcome - expectedOutcome));
   
   return newRating;
+}
+
+/**
+ * Calculates rating change based on battle difficulty
+ * @param difficulty The difficulty level of the battle
+ * @param didWin Whether the player won
+ * @returns The rating change (positive for win, negative for loss, 0 for tie)
+ */
+export function calculateRatingChange(
+  difficulty: 'Easy' | 'Medium' | 'Hard',
+  didWin: boolean | null
+): number {
+  // No rating change for ties
+  if (didWin === null) {
+    return 0;
+  }
+  
+  // Base rating points by difficulty
+  let ratingPoints = 10; // Default for Easy
+  
+  if (difficulty === 'Medium') {
+    ratingPoints = 25;
+  } else if (difficulty === 'Hard') {
+    ratingPoints = 50;
+  }
+  
+  // Apply sign based on win/loss
+  return didWin ? ratingPoints : -ratingPoints;
 }
 
 /**

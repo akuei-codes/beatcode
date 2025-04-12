@@ -13,13 +13,15 @@ import {
   PlayCircle,
   Loader2,
   Code,
-  MessageCircle
+  MessageCircle,
+  Trophy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, Battle, Submission } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProblemById, Problem } from '@/lib/problems';
+import { calculateNewRating, recordRatingChange } from '@/lib/rating';
 import CodeEditor from '@/components/CodeEditor';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +36,13 @@ interface ChatMessage {
   sender: string;
   message: string;
   timestamp: string;
+}
+
+interface BattleResults {
+  myScore: number | null;
+  opponentScore: number | null;
+  winner: 'me' | 'opponent' | 'tie' | null;
+  ratingChange: number | null;
 }
 
 const BattleArena = () => {
@@ -54,13 +63,23 @@ const BattleArena = () => {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [chatPosition, setChatPosition] = useState({ x: 100, y: 100 });
   const [showScoreDialog, setShowScoreDialog] = useState(false);
+  const [showResultsDialog, setShowResultsDialog] = useState(false);
   const [evaluationProgress, setEvaluationProgress] = useState(0);
+  const [battleResults, setBattleResults] = useState<BattleResults>({
+    myScore: null,
+    opponentScore: null,
+    winner: null,
+    ratingChange: null
+  });
+  
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSubmitRef = useRef<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatBubbleRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const channelRef = useRef<ReturnType<typeof supabase.channel>>();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hasSubmittedRef = useRef<boolean>(false);
 
   const { data: battle, isLoading, error } = useQuery({
     queryKey: ['battle', battleId],
@@ -82,6 +101,7 @@ const BattleArena = () => {
     enabled: !!battle?.problem_id,
   });
 
+  // Initialize real-time chat
   useEffect(() => {
     if (!battleId || !user) return;
 
@@ -105,41 +125,154 @@ const BattleArena = () => {
     };
   }, [battleId, user]);
 
+  // Auto-scroll chat messages
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
+  // Initialize timer from battle duration
   useEffect(() => {
     if (battle?.duration) {
       setTimeLeft(battle.duration * 60);
+      
+      // If battle is in progress, start the timer automatically
+      if (battle.status === 'in_progress' && battle.started_at) {
+        const startTime = new Date(battle.started_at).getTime();
+        const currentTime = new Date().getTime();
+        const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+        const remainingSeconds = (battle.duration * 60) - elapsedSeconds;
+        
+        if (remainingSeconds > 0) {
+          setTimeLeft(remainingSeconds);
+          setIsTimerRunning(true);
+        } else {
+          // Time already ran out
+          setTimeLeft(0);
+          setIsTimerRunning(false);
+          autoSubmitRef.current = true;
+        }
+      }
     }
   }, [battle]);
 
+  // Timer logic
   useEffect(() => {
-    if (battle && timeLeft !== null && isTimerRunning) {
+    if (timeLeft !== null && isTimerRunning) {
       timerRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev === null) return null;
           if (prev <= 0) {
             clearInterval(timerRef.current!);
             setIsTimerRunning(false);
-            toast.info("Time's up!");
+            if (!hasSubmittedRef.current) {
+              autoSubmitRef.current = true;
+              handleSubmitCode();
+            }
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
     }
+    
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isTimerRunning, timeLeft]);
 
+  // Check for completed battle
+  useEffect(() => {
+    if (!battle || !user || !battleId) return;
+    
+    // If the battle is completed, check if we need to show results
+    if (battle.status === 'completed' && battle.winner_id !== null) {
+      checkForBattleResults();
+    }
+  }, [battle, user, battleId]);
+
+  // Function to check both submissions and show results if both are submitted
+  const checkForBattleResults = async () => {
+    if (!battleId || !user || !battle) return;
+    
+    const { data: submissions, error } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('battle_id', battleId)
+      .in('status', ['evaluated', 'correct', 'incorrect']);
+    
+    if (error || !submissions || submissions.length < 2) {
+      console.log("Not all submissions are ready yet");
+      return;
+    }
+    
+    const mySubmission = submissions.find(sub => sub.user_id === user.id);
+    const opponentSubmission = submissions.find(sub => sub.user_id !== user.id);
+    
+    if (!mySubmission || !opponentSubmission) return;
+    
+    const myScore = mySubmission.score || 0;
+    const opponentScore = opponentSubmission.score || 0;
+    
+    let winner: 'me' | 'opponent' | 'tie' = 'tie';
+    if (myScore > opponentScore) {
+      winner = 'me';
+    } else if (opponentScore > myScore) {
+      winner = 'opponent';
+    }
+    
+    // Calculate rating points based on difficulty
+    let ratingPoints = 10; // Default for Easy
+    if (battle.difficulty === 'Medium') {
+      ratingPoints = 25;
+    } else if (battle.difficulty === 'Hard') {
+      ratingPoints = 50;
+    }
+    
+    // Calculate rating change
+    const ratingChange = winner === 'me' ? ratingPoints : (winner === 'opponent' ? -ratingPoints : 0);
+    
+    setBattleResults({
+      myScore,
+      opponentScore,
+      winner,
+      ratingChange
+    });
+    
+    if (!submissionResult) {
+      setSubmissionResult(mySubmission);
+    }
+    
+    // Update user rating if not already done
+    if (battle.status === 'completed' && battle.winner_id && ratingChange !== 0 && profile) {
+      // Calculate new rating
+      const newRating = profile.rating + ratingChange;
+      
+      // Record the rating change
+      await recordRatingChange(
+        user.id,
+        newRating,
+        battleId,
+        `${battle.difficulty} battle: ${winner === 'me' ? 'Victory' : 'Defeat'}`
+      );
+      
+      // Invalidate profile query to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+    }
+    
+    setShowResultsDialog(true);
+  };
+
   const handleSubmitCode = async () => {
     if (!battleId || !user || !problem) {
       toast.error("Missing required data for submission");
+      return;
+    }
+    
+    // Prevent double submissions
+    if (hasSubmittedRef.current && !autoSubmitRef.current) {
+      toast.info("You have already submitted your solution");
       return;
     }
     
@@ -152,7 +285,8 @@ const BattleArena = () => {
         battle_id: battleId,
         user_id: user.id,
         code: code.substring(0, 20) + "...",
-        language
+        language,
+        is_auto_submit: autoSubmitRef.current
       });
       
       console.log("Checking battle participation...");
@@ -178,6 +312,9 @@ const BattleArena = () => {
         setEvaluationProgress(0);
         return;
       }
+      
+      // Mark as having submitted to prevent multiple submissions
+      hasSubmittedRef.current = true;
       
       console.log("Creating submission record...");
       setEvaluationProgress(20);
@@ -296,9 +433,29 @@ const BattleArena = () => {
           toast.error('Error retrieving updated submission: ' + fetchError?.message);
         } else {
           setSubmissionResult(updatedSubmission as Submission);
+          
+          // Check if both players have submitted
+          const { data: bothSubmissions, error: countError } = await supabase
+            .from('submissions')
+            .select('*')
+            .eq('battle_id', battleId)
+            .in('status', ['evaluated', 'correct', 'incorrect']);
+          
+          const bothSubmitted = bothSubmissions && bothSubmissions.length >= 2;
+          
+          if (bothSubmitted) {
+            // Determine winner and update battle
+            await determineBattleWinner(battleId, bothSubmissions);
+            queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+          }
+          
           setShowScoreDialog(true);
-          toast.success('Code evaluated and scored!');
-          queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+          toast.success(autoSubmitRef.current 
+            ? 'Time ran out! Your code has been auto-submitted and evaluated.'
+            : 'Code evaluated and scored!');
+          
+          // Reset auto-submit flag
+          autoSubmitRef.current = false;
         }
       }
     } catch (evalError) {
@@ -330,6 +487,21 @@ const BattleArena = () => {
             if (updatedSubmission) {
               setSubmissionResult(updatedSubmission as Submission);
               setShowScoreDialog(true);
+              
+              // Check if both players have submitted
+              const { data: bothSubmissions } = await supabase
+                .from('submissions')
+                .select('*')
+                .eq('battle_id', battleId)
+                .in('status', ['evaluated', 'correct', 'incorrect']);
+              
+              const bothSubmitted = bothSubmissions && bothSubmissions.length >= 2;
+              
+              if (bothSubmitted) {
+                // Determine winner and update battle
+                await determineBattleWinner(battleId, bothSubmissions);
+              }
+              
               queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
             }
           } else {
@@ -343,6 +515,91 @@ const BattleArena = () => {
       setIsSubmitting(false);
       abortControllerRef.current = null;
       setTimeout(() => setEvaluationProgress(0), 1000);
+    }
+  };
+
+  // Function to determine battle winner based on submissions
+  const determineBattleWinner = async (battleId: string, submissions: any[]) => {
+    if (!battleId || submissions.length < 2) return;
+    
+    // Find highest score
+    let highestScore = -1;
+    let winnerId = null;
+    let isTie = false;
+    
+    submissions.forEach(sub => {
+      const score = sub.score || 0;
+      if (score > highestScore) {
+        highestScore = score;
+        winnerId = sub.user_id;
+        isTie = false;
+      } else if (score === highestScore) {
+        isTie = true;
+      }
+    });
+    
+    // In case of a tie, there's no winner
+    if (isTie) {
+      winnerId = null;
+    }
+    
+    // Update battle status to completed
+    const { error: updateError } = await supabase
+      .from('battles')
+      .update({
+        status: 'completed',
+        winner_id: winnerId,
+        ended_at: new Date().toISOString()
+      })
+      .eq('id', battleId);
+    
+    if (updateError) {
+      console.error('Error updating battle status:', updateError);
+    } else {
+      console.log(`Battle ${battleId} completed with winner: ${winnerId || 'Tie'}`);
+      
+      // Update ratings for both participants
+      if (battle) {
+        const participantIds = [battle.creator_id, battle.defender_id].filter(Boolean) as string[];
+        
+        for (const participantId of participantIds) {
+          if (!participantId) continue;
+          
+          // Get participant's current rating
+          const { data: participant } = await supabase
+            .from('users')
+            .select('rating')
+            .eq('id', participantId)
+            .single();
+          
+          if (!participant) continue;
+          
+          // Calculate points based on difficulty
+          let ratingPoints = 10; // Default for Easy
+          if (battle.difficulty === 'Medium') {
+            ratingPoints = 25;
+          } else if (battle.difficulty === 'Hard') {
+            ratingPoints = 50;
+          }
+          
+          // If tie, no rating change
+          if (isTie) {
+            ratingPoints = 0;
+          }
+          
+          // Calculate new rating
+          const didWin = !isTie && participantId === winnerId;
+          const newRating = participant.rating + (didWin ? ratingPoints : -ratingPoints);
+          
+          // Record rating change
+          await recordRatingChange(
+            participantId,
+            newRating,
+            battleId,
+            `${battle.difficulty} battle: ${isTie ? 'Tie' : (didWin ? 'Victory' : 'Defeat')}`
+          );
+        }
+      }
     }
   };
 
@@ -477,10 +734,12 @@ const BattleArena = () => {
               <Button
                 className="w-full icon-button-primary group"
                 onClick={handleSubmitCode}
-                disabled={isSubmitting}
+                disabled={isSubmitting || hasSubmittedRef.current}
               >
                 {isSubmitting ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                ) : hasSubmittedRef.current ? (
+                  <>Solution Submitted<CheckCircle className="ml-2 h-4 w-4" /></>
                 ) : (
                   <>
                     Submit Code
@@ -489,7 +748,7 @@ const BattleArena = () => {
                 )}
               </Button>
             </div>
-            {submissionResult && !showScoreDialog && (
+            {submissionResult && !showScoreDialog && !showResultsDialog && (
               <div className="mt-4 p-3 border border-icon-gray rounded-md bg-icon-gray">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">Submission Status:</span>
@@ -586,6 +845,7 @@ const BattleArena = () => {
         )}
       </div>
 
+      {/* Individual Score Dialog */}
       <Dialog open={showScoreDialog} onOpenChange={setShowScoreDialog}>
         <DialogContent className="bg-icon-dark-gray border border-icon-gray">
           <DialogHeader>
@@ -595,13 +855,114 @@ const BattleArena = () => {
             <DialogDescription className="text-center mt-2 text-white">
               {submissionResult?.feedback || 'Your code has been evaluated.'}
             </DialogDescription>
-            <p className="text-sm text-icon-light-gray text-center mt-4">
-              The winner will be announced once all players have submitted their solutions.
-            </p>
+            
+            <div className="mt-4 bg-icon-gray p-4 rounded-md border border-icon-gray/30">
+              <p className="text-sm text-icon-light-gray text-center mb-2">
+                {battle.status === 'completed' 
+                  ? "The battle has ended. View the final results."
+                  : "The winner will be announced once all players have submitted their solutions."}
+              </p>
+              
+              {battle.status === 'completed' && (
+                <Button 
+                  className="w-full mt-2" 
+                  onClick={() => {
+                    setShowScoreDialog(false);
+                    checkForBattleResults();
+                  }}
+                >
+                  View Battle Results
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           <Button className="w-full mt-4" onClick={() => setShowScoreDialog(false)}>
             Close
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Final Battle Results Dialog */}
+      <Dialog open={showResultsDialog} onOpenChange={setShowResultsDialog}>
+        <DialogContent className="bg-icon-dark-gray border border-icon-gray max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-center">
+              Battle Results
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-6">
+            <div className="flex justify-between items-center mb-8 px-4">
+              <div className="text-center">
+                <div className="text-xl font-bold">You</div>
+                <div className="text-3xl font-bold text-icon-accent mt-2">
+                  {battleResults.myScore}%
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-4xl font-bold text-gray-400">vs</div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-xl font-bold">Opponent</div>
+                <div className="text-3xl font-bold text-icon-accent mt-2">
+                  {battleResults.opponentScore}%
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-icon-gray rounded-lg p-6 text-center">
+              {battleResults.winner === 'me' && (
+                <div className="flex flex-col items-center">
+                  <Trophy className="h-14 w-14 text-yellow-400 mb-3" />
+                  <h3 className="text-xl font-bold text-green-400 mb-1">You Won!</h3>
+                  <p className="text-icon-light-gray">
+                    Your rating increased by <span className="text-green-400 font-bold">+{battleResults.ratingChange}</span> points
+                  </p>
+                </div>
+              )}
+              
+              {battleResults.winner === 'opponent' && (
+                <div className="flex flex-col items-center">
+                  <XCircle className="h-14 w-14 text-red-400 mb-3" />
+                  <h3 className="text-xl font-bold text-red-400 mb-1">You Lost</h3>
+                  <p className="text-icon-light-gray">
+                    Your rating decreased by <span className="text-red-400 font-bold">{battleResults.ratingChange}</span> points
+                  </p>
+                </div>
+              )}
+              
+              {battleResults.winner === 'tie' && (
+                <div className="flex flex-col items-center">
+                  <div className="h-14 w-14 flex items-center justify-center mb-3">
+                    <div className="text-4xl">🤝</div>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-400 mb-1">It's a Tie!</h3>
+                  <p className="text-icon-light-gray">No rating changes have been applied</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-4">
+            <Button 
+              className="w-full" 
+              onClick={() => {
+                setShowResultsDialog(false);
+                navigate('/join-battle');
+              }}
+            >
+              Find a New Battle
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              onClick={() => setShowResultsDialog(false)}
+            >
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
