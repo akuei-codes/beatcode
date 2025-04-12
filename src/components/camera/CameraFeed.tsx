@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, Loader2 } from 'lucide-react';
+import { Camera, CameraOff, Loader2, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -20,6 +20,11 @@ const CameraFeed: React.FC<CameraFeedProps> = ({
   const [cameraRequested, setCameraRequested] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const dragStartPosition = useRef({ x: 0, y: 0 });
+  const initialMousePosition = useRef({ x: 0, y: 0 });
 
   // Size classes mapping
   const sizeClasses = {
@@ -83,6 +88,47 @@ const CameraFeed: React.FC<CameraFeedProps> = ({
     }
   };
 
+  // Dragging logic
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    
+    setIsDragging(true);
+    initialMousePosition.current = { x: e.clientX, y: e.clientY };
+    dragStartPosition.current = position;
+    
+    // Prevent text selection during drag
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaX = e.clientX - initialMousePosition.current.x;
+    const deltaY = e.clientY - initialMousePosition.current.y;
+    
+    setPosition({
+      x: dragStartPosition.current.x + deltaX,
+      y: dragStartPosition.current.y + deltaY
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Add and remove event listeners
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -93,9 +139,23 @@ const CameraFeed: React.FC<CameraFeedProps> = ({
   }, []);
 
   return (
-    <div className={`flex flex-col items-center ${className}`}>
+    <div 
+      ref={containerRef}
+      className={`flex flex-col items-center ${className} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      style={{
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+        position: 'relative',
+        zIndex: 50
+      }}
+      onMouseDown={handleMouseDown}
+    >
       {cameraRequested && (
         <div className={`relative bg-icon-gray rounded-lg overflow-hidden mb-2 ${sizeClasses[size]}`}>
+          <div className="absolute top-0 right-0 bg-black/50 p-1 rounded-bl-lg z-10">
+            <Move className="h-4 w-4 text-white/70" />
+          </div>
+          
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
               <Loader2 className="h-6 w-6 animate-spin text-white" />

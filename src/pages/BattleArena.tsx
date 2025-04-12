@@ -104,7 +104,6 @@ const BattleArena = () => {
     enabled: !!battle?.problem_id,
   });
 
-  // Initialize real-time chat
   useEffect(() => {
     if (!battleId || !user) return;
 
@@ -128,19 +127,16 @@ const BattleArena = () => {
     };
   }, [battleId, user]);
 
-  // Auto-scroll chat messages
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
-  // Initialize timer from battle duration
   useEffect(() => {
     if (battle?.duration) {
       setTimeLeft(battle.duration * 60);
       
-      // If battle is in progress, start the timer automatically
       if (battle.status === 'in_progress' && battle.started_at) {
         const startTime = new Date(battle.started_at).getTime();
         const currentTime = new Date().getTime();
@@ -151,7 +147,6 @@ const BattleArena = () => {
           setTimeLeft(remainingSeconds);
           setIsTimerRunning(true);
         } else {
-          // Time already ran out
           setTimeLeft(0);
           setIsTimerRunning(false);
           autoSubmitRef.current = true;
@@ -160,7 +155,6 @@ const BattleArena = () => {
     }
   }, [battle]);
 
-  // Timer logic
   useEffect(() => {
     if (timeLeft !== null && isTimerRunning) {
       timerRef.current = setInterval(() => {
@@ -185,17 +179,14 @@ const BattleArena = () => {
     };
   }, [isTimerRunning, timeLeft]);
 
-  // Check for completed battle
   useEffect(() => {
     if (!battle || !user || !battleId) return;
     
-    // If the battle is completed, check if we need to show results
     if (battle.status === 'completed' && battle.winner_id !== null) {
       checkForBattleResults();
     }
   }, [battle, user, battleId]);
 
-  // Function to check both submissions and show results if both are submitted
   const checkForBattleResults = async () => {
     if (!battleId || !user || !battle) return;
     
@@ -225,15 +216,13 @@ const BattleArena = () => {
       winner = 'opponent';
     }
     
-    // Calculate rating points based on difficulty
-    let ratingPoints = 10; // Default for Easy
+    let ratingPoints = 10;
     if (battle.difficulty === 'Medium') {
       ratingPoints = 25;
     } else if (battle.difficulty === 'Hard') {
       ratingPoints = 50;
     }
     
-    // Calculate rating change
     const ratingChange = winner === 'me' ? ratingPoints : (winner === 'opponent' ? -ratingPoints : 0);
     
     setBattleResults({
@@ -247,20 +236,14 @@ const BattleArena = () => {
       setSubmissionResult(mySubmission);
     }
     
-    // Update user rating if not already done
     if (battle.status === 'completed' && battle.winner_id && ratingChange !== 0 && profile) {
-      // Calculate new rating
       const newRating = profile.rating + ratingChange;
-      
-      // Record the rating change
       await recordRatingChange(
         user.id,
         newRating,
         battleId,
         `${battle.difficulty} battle: ${winner === 'me' ? 'Victory' : 'Defeat'}`
       );
-      
-      // Invalidate profile query to refresh the UI
       queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
     }
     
@@ -273,7 +256,6 @@ const BattleArena = () => {
       return;
     }
     
-    // Prevent double submissions
     if (hasSubmittedRef.current && !autoSubmitRef.current) {
       toast.info("You have already submitted your solution");
       return;
@@ -316,7 +298,6 @@ const BattleArena = () => {
         return;
       }
       
-      // Mark as having submitted to prevent multiple submissions
       hasSubmittedRef.current = true;
       
       console.log("Creating submission record...");
@@ -347,16 +328,14 @@ const BattleArena = () => {
       submissionData = submission;
       setEvaluationProgress(40);
       
-      // Setup abort controller for timeout handling
       abortControllerRef.current = new AbortController();
       
-      console.log("Setting up API request with timeout...");
       const timeoutId = setTimeout(() => {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
           console.log("API request aborted due to timeout");
         }
-      }, 15000); // 15 second timeout
+      }, 15000);
       
       console.log("Sending evaluation request to GPT API...");
       const gptRes = await fetch("https://icon-scoring.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-01-01-preview", {
@@ -437,7 +416,6 @@ const BattleArena = () => {
         } else {
           setSubmissionResult(updatedSubmission as Submission);
           
-          // Check if both players have submitted
           const { data: bothSubmissions, error: countError } = await supabase
             .from('submissions')
             .select('*')
@@ -447,7 +425,6 @@ const BattleArena = () => {
           const bothSubmitted = bothSubmissions && bothSubmissions.length >= 2;
           
           if (bothSubmitted) {
-            // Determine winner and update battle
             await determineBattleWinner(battleId, bothSubmissions);
             queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
           }
@@ -457,7 +434,6 @@ const BattleArena = () => {
             ? 'Time ran out! Your code has been auto-submitted and evaluated.'
             : 'Code evaluated and scored!');
           
-          // Reset auto-submit flag
           autoSubmitRef.current = false;
         }
       }
@@ -466,7 +442,6 @@ const BattleArena = () => {
       if (evalError instanceof DOMException && evalError.name === 'AbortError') {
         toast.error('Evaluation timed out. Please try again with simpler code.');
         
-        // Use the stored submission data for the fallback update
         if (submissionData) {
           console.log("Applying fallback evaluation due to timeout");
           const { error: fallbackError } = await supabase
@@ -491,7 +466,6 @@ const BattleArena = () => {
               setSubmissionResult(updatedSubmission as Submission);
               setShowScoreDialog(true);
               
-              // Check if both players have submitted
               const { data: bothSubmissions } = await supabase
                 .from('submissions')
                 .select('*')
@@ -501,7 +475,6 @@ const BattleArena = () => {
               const bothSubmitted = bothSubmissions && bothSubmissions.length >= 2;
               
               if (bothSubmitted) {
-                // Determine winner and update battle
                 await determineBattleWinner(battleId, bothSubmissions);
               }
               
@@ -521,11 +494,9 @@ const BattleArena = () => {
     }
   };
 
-  // Function to determine battle winner based on submissions
   const determineBattleWinner = async (battleId: string, submissions: any[]) => {
     if (!battleId || submissions.length < 2) return;
     
-    // Find highest score
     let highestScore = -1;
     let winnerId = null;
     let isTie = false;
@@ -541,12 +512,10 @@ const BattleArena = () => {
       }
     });
     
-    // In case of a tie, there's no winner
     if (isTie) {
       winnerId = null;
     }
     
-    // Update battle status to completed
     const { error: updateError } = await supabase
       .from('battles')
       .update({
@@ -561,47 +530,39 @@ const BattleArena = () => {
     } else {
       console.log(`Battle ${battleId} completed with winner: ${winnerId || 'Tie'}`);
       
-      // Update ratings for both participants
-      if (battle) {
-        const participantIds = [battle.creator_id, battle.defender_id].filter(Boolean) as string[];
+      const participantIds = [battle.creator_id, battle.defender_id].filter(Boolean) as string[];
+      
+      for (const participantId of participantIds) {
+        if (!participantId) continue;
         
-        for (const participantId of participantIds) {
-          if (!participantId) continue;
-          
-          // Get participant's current rating
-          const { data: participant } = await supabase
-            .from('users')
-            .select('rating')
-            .eq('id', participantId)
-            .single();
-          
-          if (!participant) continue;
-          
-          // Calculate points based on difficulty
-          let ratingPoints = 10; // Default for Easy
-          if (battle.difficulty === 'Medium') {
-            ratingPoints = 25;
-          } else if (battle.difficulty === 'Hard') {
-            ratingPoints = 50;
-          }
-          
-          // If tie, no rating change
-          if (isTie) {
-            ratingPoints = 0;
-          }
-          
-          // Calculate new rating
-          const didWin = !isTie && participantId === winnerId;
-          const newRating = participant.rating + (didWin ? ratingPoints : -ratingPoints);
-          
-          // Record rating change
-          await recordRatingChange(
-            participantId,
-            newRating,
-            battleId,
-            `${battle.difficulty} battle: ${isTie ? 'Tie' : (didWin ? 'Victory' : 'Defeat')}`
-          );
+        const { data: participant } = await supabase
+          .from('users')
+          .select('rating')
+          .eq('id', participantId)
+          .single();
+        
+        if (!participant) continue;
+        
+        let ratingPoints = 10;
+        if (battle.difficulty === 'Medium') {
+          ratingPoints = 25;
+        } else if (battle.difficulty === 'Hard') {
+          ratingPoints = 50;
         }
+        
+        if (isTie) {
+          ratingPoints = 0;
+        }
+        
+        const didWin = !isTie && participantId === winnerId;
+        const newRating = participant.rating + (didWin ? ratingPoints : -ratingPoints);
+        
+        await recordRatingChange(
+          participantId,
+          newRating,
+          battleId,
+          `${battle.difficulty} battle: ${isTie ? 'Tie' : (didWin ? 'Victory' : 'Defeat')}`
+        );
       }
     }
   };
@@ -790,7 +751,6 @@ const BattleArena = () => {
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      {/* Camera Feed */}
       {showCamera && (
         <div className="fixed bottom-4 right-4 z-50">
           <CameraFeed 
@@ -871,9 +831,104 @@ const BattleArena = () => {
         )}
       </div>
 
-      {/* Individual Score Dialog */}
       <Dialog open={showScoreDialog} onOpenChange={setShowScoreDialog}>
         <DialogContent className="bg-icon-dark-gray border border-icon-gray">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center text-icon-accent">
-              You scored {submissionResult?.score ||
+              You scored {submissionResult?.score || 0}%
+            </DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              {submissionResult?.feedback || "Your solution has been evaluated"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {submissionResult?.score !== null && (
+              <div className="mb-4">
+                <div className="flex justify-between text-xs text-icon-light-gray mb-1">
+                  <span>Score</span>
+                  <span>{submissionResult.score}%</span>
+                </div>
+                <Progress value={submissionResult.score} className="h-2" />
+              </div>
+            )}
+            <div className="bg-icon-gray p-4 rounded-md text-sm whitespace-pre-wrap">
+              {submissionResult?.feedback || "Feedback will appear here after evaluation"}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowScoreDialog(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showResultsDialog} onOpenChange={setShowResultsDialog}>
+        <DialogContent className="bg-icon-dark-gray border border-icon-gray">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
+              <Trophy className="h-6 w-6 text-yellow-500" />
+              Battle Results
+            </DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              Your battle has been completed!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-6">
+            <div className="grid grid-cols-3 gap-4 items-center">
+              <div className="text-center">
+                <div className="text-2xl font-bold">{battleResults.myScore}%</div>
+                <div className="text-sm text-icon-light-gray">You</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-icon-light-gray">vs</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold">{battleResults.opponentScore}%</div>
+                <div className="text-sm text-icon-light-gray">Opponent</div>
+              </div>
+            </div>
+            
+            <div className="bg-icon-gray p-4 rounded-md text-center">
+              {battleResults.winner === 'me' && (
+                <div className="text-green-500 font-bold text-lg flex items-center justify-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  Victory!
+                </div>
+              )}
+              {battleResults.winner === 'opponent' && (
+                <div className="text-red-500 font-bold text-lg flex items-center justify-center gap-2">
+                  <XCircle className="h-5 w-5" />
+                  Defeat
+                </div>
+              )}
+              {battleResults.winner === 'tie' && (
+                <div className="text-yellow-500 font-bold text-lg flex items-center justify-center gap-2">
+                  <PauseCircle className="h-5 w-5" />
+                  Tie
+                </div>
+              )}
+              
+              {battleResults.ratingChange !== null && (
+                <div className="mt-2">
+                  <span>Rating </span>
+                  <span className={`font-semibold ${battleResults.ratingChange > 0 ? 'text-green-500' : battleResults.ratingChange < 0 ? 'text-red-500' : 'text-icon-light-gray'}`}>
+                    {battleResults.ratingChange > 0 ? '+' : ''}{battleResults.ratingChange}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => navigate('/battles')}>
+              All Battles
+            </Button>
+            <Button onClick={() => navigate('/')}>
+              Home
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default BattleArena;
